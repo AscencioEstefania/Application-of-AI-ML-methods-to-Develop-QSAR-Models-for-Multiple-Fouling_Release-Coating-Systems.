@@ -287,9 +287,79 @@ else:
 
 
 # ============================================================
+# PART 2 — BUILD MIX DESCRIPTORS (System 1 + System 2 tests)
+# ============================================================
+st.markdown("---")
+st.header("2) Mix descriptors tests")
+
+# ----------------------------
+# Load pure descriptors ONCE
+# ----------------------------
+try:
+    df_pure = load_pure_descriptors(PURE_CSV_PATH)
+except Exception as e:
+    st.error(f"Could not load {PURE_CSV_PATH}: {e}")
+    st.stop()
+
+# Feature columns: everything except label/id columns
+drop_cols = {COMP_COL, "No.", "No", "ID", "Id"}
+feature_cols = [c for c in df_pure.columns if c not in drop_cols]
+
+if len(feature_cols) == 0:
+    st.error("No descriptor columns found in your Pure_descriptors.csv (feature_cols is empty).")
+    st.stop()
+
+# ============================================================
+# SYSTEM 1 TEST — SBMA + PDMS
+# ============================================================
+st.subheader("System 1 — SBMA + PDMS")
+
+req_s1 = next((r for r in user_requests if r["system"] == "SBMA_PDMS"), None)
+
+if req_s1 is None:
+    st.info("Select 'SBMA + PDMS' above to run the System 1 test.")
+else:
+    try:
+        # Validation
+        validate_range("SBMA", req_s1["mw_a"], SBMA_MW_RANGE[0], SBMA_MW_RANGE[1])
+        validate_range("PDMS", req_s1["mw_b"], PDMS_MW_RANGE[0], PDMS_MW_RANGE[1])
+        validate_p("SBMA", req_s1["p_a"])
+        validate_p("PDMS", req_s1["p_b"])
+
+        # Load pure rows
+        row_sbma = get_pure_row(df_pure, "SBMA")
+        row_pdms = get_pure_row(df_pure, "PDMS")
+
+        # Build mix
+        X_mix1, (n_sbma, n_pdms) = build_mix_system1(
+            row_sbma=row_sbma,
+            row_pdms=row_pdms,
+            feature_cols=feature_cols,
+            mw_sbma=req_s1["mw_a"],
+            p_sbma=req_s1["p_a"],
+            mw_pdms=req_s1["mw_b"],
+            p_pdms=req_s1["p_b"],
+            additive_amount=req_s1["A_add"]
+        )
+
+        st.success("✅ System 1 mix descriptors built successfully!")
+        st.write(f"SBMA monomer units (n) = {n_sbma:.6f} | PDMS monomer units (n) = {n_pdms:.6f}")
+        st.write(f"Additive Amount A = {req_s1['A_add']}")
+        st.write(f"X_mix1 shape: {X_mix1.shape}")
+
+        if len(feature_cols) <= 12:
+            st.dataframe(pd.DataFrame(X_mix1, columns=feature_cols))
+        else:
+            st.dataframe(pd.DataFrame(X_mix1[:, :12], columns=feature_cols[:12]))
+
+    except Exception as e:
+        st.error(f"Failed to build System 1 mix descriptors: {e}")
+        st.stop()
+
+# ============================================================
 # SYSTEM 2 TEST — PDMS + PEG
 # ============================================================
-st.header("2) System 2 test — PDMS + PEG (mix descriptors)")
+st.subheader("System 2 — PDMS + PEG")
 
 req_s2 = next((r for r in user_requests if r["system"] == "PDMS_PEG"), None)
 
@@ -297,19 +367,19 @@ if req_s2 is None:
     st.info("Select 'PDMS + PEG' above to run the System 2 test.")
 else:
     try:
-        # Validate p
+        # Validation
         validate_p("PDMS", req_s2["p_a"])
         validate_p("PEG", req_s2["p_b"])
 
-        # Validate fixed MWs
         validate_fixed_mw("PDMS", req_s2["mw_a"], SYSTEM2_FIXED_MW["PDMS"])
         validate_fixed_mw("PEG",  req_s2["mw_b"], SYSTEM2_FIXED_MW["PEG"])
 
-        # Validate A range for System 2
         if not (SYSTEM2_A_RANGE[0] <= req_s2["A_add"] <= SYSTEM2_A_RANGE[1]):
-            raise ValueError(f"System 2 Additive Amount A must be between {SYSTEM2_A_RANGE[0]} and {SYSTEM2_A_RANGE[1]}.")
+            raise ValueError(
+                f"System 2 Additive Amount A must be between {SYSTEM2_A_RANGE[0]} and {SYSTEM2_A_RANGE[1]}."
+            )
 
-        # Get pure rows
+        # Load pure rows
         row_pdms = get_pure_row(df_pure, "PDMS")
         row_peg  = get_pure_row(df_pure, "PEG")
 
@@ -330,12 +400,10 @@ else:
         st.write(f"Additive Amount A = {req_s2['A_add']}")
         st.write(f"X_mix2 shape: {X_mix2.shape}")
 
-        # Show some columns
         if len(feature_cols) <= 12:
             st.dataframe(pd.DataFrame(X_mix2, columns=feature_cols))
         else:
-            preview_n = 12
-            st.dataframe(pd.DataFrame(X_mix2[:, :preview_n], columns=feature_cols[:preview_n]))
+            st.dataframe(pd.DataFrame(X_mix2[:, :12], columns=feature_cols[:12]))
 
     except Exception as e:
         st.error(f"Failed to build System 2 mix descriptors: {e}")
