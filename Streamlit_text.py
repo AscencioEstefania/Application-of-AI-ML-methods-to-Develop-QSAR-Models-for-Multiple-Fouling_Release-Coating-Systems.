@@ -24,17 +24,17 @@ def load_pure_descriptors(path=PURE_CSV_PATH):
     df = pd.read_csv(path)
     df.columns = df.columns.astype(str).str.strip()
 
-    if "Component" not in df.columns:
-        raise ValueError(f"{path} must include a column named 'Component'.")
+    if "Comp" not in df.columns:
+        raise ValueError(f"{path} must include a column named 'Comp'.")
 
-    df["Component"] = df["Component"].astype(str).str.strip().str.upper()
+    df["Comp"] = df["Comp"].astype(str).str.strip().str.upper()
     return df
 
-def get_pure_row(df_pure, component_name: str):
-    comp = component_name.strip().upper()
-    row = df_pure[df_pure["Component"] == comp]
+def get_pure_row(df_pure, compo_name: str):
+    comp = comp_name.strip().upper()
+    row = df_pure[df_pure["Comp"] == comp]
     if row.empty:
-        raise ValueError(f"Component not found in {PURE_CSV_PATH}: {component_name}")
+        raise ValueError(f"Compo not found in {PURE_CSV_PATH}: {comp_name}")
     return row.iloc[0]
 
 def validate_range(name: str, mw_value: float, mw_min: float, mw_max: float):
@@ -92,12 +92,12 @@ def system_expander(label: str):
         c1, c2 = st.columns(2)
 
         with c1:
-            mw_a = st.number_input(f"[{label}] MW component A", min_value=0.0, value=1000.0, step=10.0, key=f"{sys_code}_mw_a")
-            perc_a = st.number_input(f"[{label}] % component A", min_value=0.0, max_value=100.0, value=50.0, step=1.0, key=f"{sys_code}_perc_a")
+            mw_a = st.number_input(f"[{label}] MW Comp A", min_value=0.0, value=1000.0, step=10.0, key=f"{sys_code}_mw_a")
+            perc_a = st.number_input(f"[{label}] % Comp A", min_value=0.0, max_value=100.0, value=50.0, step=1.0, key=f"{sys_code}_perc_a")
 
         with c2:
-            mw_b = st.number_input(f"[{label}] MW component B", min_value=0.0, value=1000.0, step=10.0, key=f"{sys_code}_mw_b")
-            perc_b = st.number_input(f"[{label}] % component B", min_value=0.0, max_value=100.0, value=50.0, step=1.0, key=f"{sys_code}_perc_b")
+            mw_b = st.number_input(f"[{label}] MW Comp B", min_value=0.0, value=1000.0, step=10.0, key=f"{sys_code}_mw_b")
+            perc_b = st.number_input(f"[{label}] % Comp B", min_value=0.0, max_value=100.0, value=50.0, step=1.0, key=f"{sys_code}_perc_b")
 
         if (perc_a + perc_b) == 0:
             st.error("Percentages cannot both be zero.")
@@ -129,7 +129,7 @@ except Exception as e:
     st.error(f"Could not load {PURE_CSV_PATH}: {e}")
     st.stop()
 
-feature_cols = [c for c in df_pure.columns if c != "Component"]
+feature_cols = [c for c in df_pure.columns if c != "Comp"]
 
 req_s1 = next((r for r in user_requests if r["system"] == "SBMA_PDMS"), None)
 
@@ -167,6 +167,7 @@ else:
     except Exception as e:
         st.error(f"Failed to build System 1 mix descriptors: {e}")
         st.stop()
+
 
 
 
