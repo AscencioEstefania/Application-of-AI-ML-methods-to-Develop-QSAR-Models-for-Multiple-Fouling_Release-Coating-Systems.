@@ -286,4 +286,60 @@ else:
         st.stop()
 
 
+# ============================================================
+# SYSTEM 2 TEST — PDMS + PEG
+# ============================================================
+st.header("2) System 2 test — PDMS + PEG (mix descriptors)")
+
+req_s2 = next((r for r in user_requests if r["system"] == "PDMS_PEG"), None)
+
+if req_s2 is None:
+    st.info("Select 'PDMS + PEG' above to run the System 2 test.")
+else:
+    try:
+        # Validate p
+        validate_p("PDMS", req_s2["p_a"])
+        validate_p("PEG", req_s2["p_b"])
+
+        # Validate fixed MWs
+        validate_fixed_mw("PDMS", req_s2["mw_a"], SYSTEM2_FIXED_MW["PDMS"])
+        validate_fixed_mw("PEG",  req_s2["mw_b"], SYSTEM2_FIXED_MW["PEG"])
+
+        # Validate A range for System 2
+        if not (SYSTEM2_A_RANGE[0] <= req_s2["A_add"] <= SYSTEM2_A_RANGE[1]):
+            raise ValueError(f"System 2 Additive Amount A must be between {SYSTEM2_A_RANGE[0]} and {SYSTEM2_A_RANGE[1]}.")
+
+        # Get pure rows
+        row_pdms = get_pure_row(df_pure, "PDMS")
+        row_peg  = get_pure_row(df_pure, "PEG")
+
+        # Build mix
+        X_mix2, (n_pdms, n_peg) = build_mix_system2(
+            row_pdms=row_pdms,
+            row_peg=row_peg,
+            feature_cols=feature_cols,
+            mw_pdms=req_s2["mw_a"],
+            p_pdms=req_s2["p_a"],
+            mw_peg=req_s2["mw_b"],
+            p_peg=req_s2["p_b"],
+            additive_amount=req_s2["A_add"]
+        )
+
+        st.success("✅ System 2 mix descriptors built successfully!")
+        st.write(f"PDMS monomer units (n) = {n_pdms:.6f} | PEG monomer units (n) = {n_peg:.6f}")
+        st.write(f"Additive Amount A = {req_s2['A_add']}")
+        st.write(f"X_mix2 shape: {X_mix2.shape}")
+
+        # Show some columns
+        if len(feature_cols) <= 12:
+            st.dataframe(pd.DataFrame(X_mix2, columns=feature_cols))
+        else:
+            preview_n = 12
+            st.dataframe(pd.DataFrame(X_mix2[:, :preview_n], columns=feature_cols[:preview_n]))
+
+    except Exception as e:
+        st.error(f"Failed to build System 2 mix descriptors: {e}")
+        st.stop()
+
+
 
