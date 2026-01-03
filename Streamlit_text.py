@@ -17,10 +17,10 @@ st.image("fouling_boat.png", use_container_width=True)
 st.title("Fouling Release Predictor")
 
 # ============================================================
-# DATA HELPERS (pure descriptors)
+# DATA HELPERS (Pure descriptors)
 # ============================================================
 @st.cache_data
-def load_pure_descriptors(path="pure_descriptors.csv"):
+def load_Pure_descriptors(path="Pure_descriptors.csv"):
     df = pd.read_csv(path)
     df.columns = df.columns.astype(str).str.strip()
     if "Component" not in df.columns:
@@ -28,11 +28,11 @@ def load_pure_descriptors(path="pure_descriptors.csv"):
     df["Component"] = df["Component"].astype(str).str.strip().str.upper()
     return df
 
-def get_pure_row(df_pure, component_name: str):
+def get_Pure_row(df_Pure, component_name: str):
     comp = component_name.strip().upper()
-    row = df_pure[df_pure["Component"] == comp]
+    row = df_Pure[df_Pure["Component"] == comp]
     if row.empty:
-        raise ValueError(f"Component not found in pure_descriptors.csv: {component_name}")
+        raise ValueError(f"Component not found in Pure_descriptors.csv: {component_name}")
     return row.iloc[0]
 
 def validate_range(name: str, mw_value: float, mw_min: float, mw_max: float):
@@ -201,5 +201,6 @@ else:
     except Exception as e:
         st.error(f"Failed to build System 1 mix descriptors: {e}")
         st.stop()
+
 
 
