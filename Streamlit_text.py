@@ -24,7 +24,7 @@ def load_pure_descriptors(path="pure_descriptors.csv"):
     df = pd.read_csv(path)
     df.columns = df.columns.astype(str).str.strip()
     if "Component" not in df.columns:
-        raise ValueError("pure_descriptors.csv must include a column named 'Component'.")
+        raise ValueError("Pure_descriptors.csv must include a column named 'Component'.")
     df["Component"] = df["Component"].astype(str).str.strip().str.upper()
     return df
 
@@ -201,4 +201,5 @@ else:
     except Exception as e:
         st.error(f"Failed to build System 1 mix descriptors: {e}")
         st.stop()
+
 
