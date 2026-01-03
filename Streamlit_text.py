@@ -15,11 +15,12 @@ st.image("fouling_boat.png", use_container_width=True)
 st.title("Fouling Release Predictor")
 
 # ============================================================
-# Pure descriptors CSV (your repo file: "Pure_descriptors.csv")
+# Pure descriptors CSV
+# Repo file name: "Pure_descriptors.csv"
 # Component column: "Comp"  (PDMS, PEG, SBMA, PMHS)
 # ============================================================
 PURE_CSV_PATH = "Pure_descriptors.csv"
-COMP_COL = "Comp"  # <-- your real column name
+COMP_COL = "Comp"  # your real column name in the CSV
 
 @st.cache_data
 def load_pure_descriptors(path: str = PURE_CSV_PATH) -> pd.DataFrame:
@@ -27,9 +28,8 @@ def load_pure_descriptors(path: str = PURE_CSV_PATH) -> pd.DataFrame:
     Loads the pure descriptors file and standardizes component labels.
     Also handles ';' delimiter if needed.
     """
-    # Try comma first
     df = pd.read_csv(path, encoding="utf-8")
-    # If it looks like a single column, try semicolon
+    # If it looks like a single column, try semicolon delimiter
     if df.shape[1] == 1:
         df = pd.read_csv(path, encoding="utf-8", delimiter=";")
 
@@ -62,25 +62,13 @@ def validate_p(name: str, p_value: float):
         raise ValueError(f"{name} p (0–1) must be between 0 and 1. You entered {p_value}.")
 
 
-# ============================================================
-# System 1 constants (SBMA + PDMS)
-# MW ranges given by you:
-# - SBMA: 500–2500
-# - PDMS: 1000–5000
-# Monomer MW:
-# - SBMA: 279.3566
-# - PDMS: 74.1535
-# ============================================================
-MONOMER_MW = {
-    "SBMA": 279.3566,
-    "PDMS": 74.1535,
-    # (later systems)
-    "PEG":  62.0668,
-    "PMHS": None,
-}
-
-SBMA_MW_RANGE = (500.0, 2500.0)
-PDMS_MW_RANGE = (1000.0, 5000.0)
+def validate_fixed_mw(name: str, mw_value: float, allowed_value: float, tol: float = 1e-6):
+    """
+    Enforces fixed MW (e.g., PDMS must be exactly 750).
+    """
+    mw = float(mw_value)
+    if abs(mw - float(allowed_value)) > tol:
+        raise ValueError(f"{name} MW must be exactly {allowed_value}. You entered {mw_value}.")
 
 
 def make_feature_matrix_safe(row: pd.Series, feature_cols: list) -> np.ndarray:
@@ -89,8 +77,6 @@ def make_feature_matrix_safe(row: pd.Series, feature_cols: list) -> np.ndarray:
     If any non-numeric values exist, raises a clean error showing which columns failed.
     """
     s = row[feature_cols].copy()
-
-    # Convert to numeric; non-numeric -> NaN
     numeric = pd.to_numeric(s, errors="coerce")
 
     bad_cols = list(numeric[numeric.isna()].index)
@@ -105,6 +91,35 @@ def make_feature_matrix_safe(row: pd.Series, feature_cols: list) -> np.ndarray:
     return numeric.astype(float).to_numpy()
 
 
+# ============================================================
+# MONOMER MW (given by you)
+# ============================================================
+MONOMER_MW = {
+    "SBMA": 279.3566,
+    "PDMS": 74.1535,
+    "PEG":  62.0668,
+    # PMHS not used yet here
+}
+
+# ============================================================
+# System 1 (SBMA + PDMS) constraints
+# ============================================================
+SBMA_MW_RANGE = (500.0, 2500.0)
+PDMS_MW_RANGE = (1000.0, 5000.0)
+SYSTEM1_A_RANGE = (0.01, 0.02)
+
+# ============================================================
+# System 2 (PDMS + PEG) constraints
+# ============================================================
+SYSTEM2_FIXED_MW = {"PDMS": 750.0, "PEG": 1000.0}
+SYSTEM2_A_RANGE = (0.10, 0.40)
+
+# ============================================================
+# MIX builders (your formula)
+# n = MW_user / MW_monomer
+# mix = A * (D_A*n_A*p_A + D_B*n_B*p_B)
+# p is already 0–1 (NO /100)
+# ============================================================
 def build_mix_system1(
     row_sbma: pd.Series,
     row_pdms: pd.Series,
@@ -115,29 +130,38 @@ def build_mix_system1(
     p_pdms: float,          # already 0–1
     additive_amount: float  # A in [0.01, 0.02]
 ):
-    """
-    System 1 mix descriptors:
-
-    n = MW_user / MW_monomer      (monomer units)
-    mix = A * (D_SBMA*n_SBMA*p_SBMA + D_PDMS*n_PDMS*p_PDMS)
-
-    Returns:
-      X_mix (1, n_features)
-      (n_sbma, n_pdms)
-    """
-    # monomer units (THIS is what you want; not "fraction")
     n_sbma = float(mw_sbma) / float(MONOMER_MW["SBMA"])
     n_pdms = float(mw_pdms) / float(MONOMER_MW["PDMS"])
 
     vec_sbma = make_feature_matrix_safe(row_sbma, feature_cols)
     vec_pdms = make_feature_matrix_safe(row_pdms, feature_cols)
 
-    mix = additive_amount * ((vec_sbma * n_sbma * p_sbma) + (vec_pdms * n_pdms * p_pdms))
+    mix = float(additive_amount) * ((vec_sbma * n_sbma * float(p_sbma)) + (vec_pdms * n_pdms * float(p_pdms)))
     return mix.reshape(1, -1), (n_sbma, n_pdms)
 
 
+def build_mix_system2(
+    row_pdms: pd.Series,
+    row_peg: pd.Series,
+    feature_cols: list,
+    mw_pdms: float,
+    p_pdms: float,          # already 0–1
+    mw_peg: float,
+    p_peg: float,           # already 0–1
+    additive_amount: float  # A in [0.10, 0.40]
+):
+    n_pdms = float(mw_pdms) / float(MONOMER_MW["PDMS"])
+    n_peg  = float(mw_peg)  / float(MONOMER_MW["PEG"])
+
+    vec_pdms = make_feature_matrix_safe(row_pdms, feature_cols)
+    vec_peg  = make_feature_matrix_safe(row_peg,  feature_cols)
+
+    mix = float(additive_amount) * ((vec_pdms * n_pdms * float(p_pdms)) + (vec_peg * n_peg * float(p_peg)))
+    return mix.reshape(1, -1), (n_pdms, n_peg)
+
+
 # ============================================================
-# PART 1 — UI: system selector + inputs
+# PART 1 — MULTI-SYSTEM INPUT (UI)
 # ============================================================
 st.markdown("---")
 st.header("1) Select coating system(s)")
@@ -145,14 +169,10 @@ st.header("1) Select coating system(s)")
 SYSTEMS = {
     "SBMA + PDMS": "SBMA_PDMS",
     "PDMS + PEG": "PDMS_PEG",
-    "PEG + PMHS": "PEG_PMHS",
+    "PEG + PMHS": "PEG_PMHS",  # (not implemented yet)
 }
 
-mode = st.radio(
-    "What do you want to evaluate?",
-    ["Only one system", "All systems"],
-    horizontal=True
-)
+mode = st.radio("What do you want to evaluate?", ["Only one system", "All systems"], horizontal=True)
 
 if mode == "Only one system":
     chosen_label = st.selectbox("Select the system:", list(SYSTEMS.keys()))
@@ -166,12 +186,54 @@ def system_expander(label: str):
     with st.expander(f"System: {label}", expanded=(mode == "Only one system")):
         c1, c2 = st.columns(2)
 
-        with c1:
-            mw_a = st.number_input(
-                f"[{label}] MW component A",
-                min_value=0.0, value=1000.0, step=10.0,
-                key=f"{sys_code}_mw_a"
+        # ---- Additive Amount A (depends on system) ----
+        if sys_code == "SBMA_PDMS":
+            A_add = st.number_input(
+                f"[{label}] Additive Amount A",
+                min_value=SYSTEM1_A_RANGE[0],
+                max_value=SYSTEM1_A_RANGE[1],
+                value=SYSTEM1_A_RANGE[0],
+                step=0.001,
+                format="%.3f",
+                key=f"{sys_code}_A_add"
             )
+        elif sys_code == "PDMS_PEG":
+            A_add = st.number_input(
+                f"[{label}] Additive Amount A",
+                min_value=SYSTEM2_A_RANGE[0],
+                max_value=SYSTEM2_A_RANGE[1],
+                value=SYSTEM2_A_RANGE[0],
+                step=0.01,
+                format="%.2f",
+                key=f"{sys_code}_A_add"
+            )
+        else:
+            A_add = st.number_input(
+                f"[{label}] Additive Amount A",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.01,
+                step=0.01,
+                key=f"{sys_code}_A_add"
+            )
+
+        with c1:
+            # MW A
+            if sys_code == "PDMS_PEG":
+                mw_a = st.selectbox(
+                    f"[{label}] MW component A (PDMS fixed)",
+                    options=[SYSTEM2_FIXED_MW["PDMS"]],
+                    key=f"{sys_code}_mw_a_select"
+                )
+                mw_a = float(mw_a)
+            else:
+                mw_a = st.number_input(
+                    f"[{label}] MW component A",
+                    min_value=0.0, value=1000.0, step=10.0,
+                    key=f"{sys_code}_mw_a"
+                )
+
+            # p A (0-1)
             p_a = st.number_input(
                 f"[{label}] p (0–1) component A",
                 min_value=0.0, max_value=1.0, value=0.5, step=0.01,
@@ -179,34 +241,38 @@ def system_expander(label: str):
             )
 
         with c2:
-            mw_b = st.number_input(
-                f"[{label}] MW component B",
-                min_value=0.0, value=1000.0, step=10.0,
-                key=f"{sys_code}_mw_b"
-            )
+            # MW B
+            if sys_code == "PDMS_PEG":
+                mw_b = st.selectbox(
+                    f"[{label}] MW component B (PEG fixed)",
+                    options=[SYSTEM2_FIXED_MW["PEG"]],
+                    key=f"{sys_code}_mw_b_select"
+                )
+                mw_b = float(mw_b)
+            else:
+                mw_b = st.number_input(
+                    f"[{label}] MW component B",
+                    min_value=0.0, value=1000.0, step=10.0,
+                    key=f"{sys_code}_mw_b"
+                )
+
+            # p B (0-1)
             p_b = st.number_input(
                 f"[{label}] p (0–1) component B",
                 min_value=0.0, max_value=1.0, value=0.5, step=0.01,
                 key=f"{sys_code}_p_b"
             )
 
-        additive_amount = st.number_input(
-            f"[{label}] Additive Amount A (0.01–0.02)",
-            min_value=0.01, max_value=0.02, value=0.01, step=0.001,
-            key=f"{sys_code}_A_add"
-        )
-
         if (p_a + p_b) == 0:
             st.error("p values cannot both be zero.")
             return None
 
-        st.caption("Next step: we will connect this input to your descriptor-based model.")
-
+        st.caption("Next step: connect this to your descriptor-based ML model.")
         return {
             "system": sys_code,
             "mw_a": mw_a, "p_a": p_a,
             "mw_b": mw_b, "p_b": p_b,
-            "A_add": additive_amount
+            "A_add": A_add,
         }
 
 
@@ -219,12 +285,11 @@ for label in systems_to_show:
 st.subheader("Current inputs (debug)")
 st.dataframe(user_requests)
 
-
 # ============================================================
-# PART 2 — SYSTEM 1 TEST (SBMA + PDMS) — BUILD MIX DESCRIPTORS
+# PART 2 — BUILD MIX DESCRIPTORS (System 1 & System 2)
 # ============================================================
 st.markdown("---")
-st.header("2) System 1 test — SBMA + PDMS (mix descriptors)")
+st.header("2) Mix descriptors tests")
 
 # Load pure descriptors
 try:
@@ -233,85 +298,13 @@ except Exception as e:
     st.error(f"Could not load {PURE_CSV_PATH}: {e}")
     st.stop()
 
-# Feature columns: everything except label columns you might have
+# Feature columns: everything except label columns
 drop_cols = {COMP_COL, "No.", "No", "ID"}
 feature_cols = [c for c in df_pure.columns if c not in drop_cols]
 
-req_s1 = next((r for r in user_requests if r["system"] == "SBMA_PDMS"), None)
-
-if req_s1 is None:
-    st.info("Select 'SBMA + PDMS' above to run the System 1 test.")
-else:
-    # Mapping for System 1:
-    # A = SBMA  (mw_a, p_a)
-    # B = PDMS  (mw_b, p_b)
-    try:
-        validate_range("SBMA", req_s1["mw_a"], SBMA_MW_RANGE[0], SBMA_MW_RANGE[1])
-        validate_range("PDMS", req_s1["mw_b"], PDMS_MW_RANGE[0], PDMS_MW_RANGE[1])
-        validate_p("SBMA", req_s1["p_a"])
-        validate_p("PDMS", req_s1["p_b"])
-    except Exception as e:
-        st.error(str(e))
-        st.stop()
-
-    try:
-        row_sbma = get_pure_row(df_pure, "SBMA")
-        row_pdms = get_pure_row(df_pure, "PDMS")
-    except Exception as e:
-        st.error(str(e))
-        st.stop()
-
-    try:
-        X_mix, (n_sbma, n_pdms) = build_mix_system1(
-            row_sbma, row_pdms, feature_cols,
-            req_s1["mw_a"], req_s1["p_a"],
-            req_s1["mw_b"], req_s1["p_b"],
-            additive_amount=req_s1["A_add"]
-        )
-
-        st.success("✅ System 1 mix descriptors built successfully!")
-        st.write(f"SBMA monomer units (n) = {n_sbma:.6f} | PDMS monomer units (n) = {n_pdms:.6f}")
-        st.write(f"Additive Amount A = {req_s1['A_add']}")
-        st.write(f"X_mix shape: {X_mix.shape}")
-
-        # Show all if few, otherwise show first 12
-        if len(feature_cols) <= 12:
-            st.dataframe(pd.DataFrame(X_mix, columns=feature_cols))
-        else:
-            preview_n = 12
-            st.dataframe(pd.DataFrame(X_mix[:, :preview_n], columns=feature_cols[:preview_n]))
-
-    except Exception as e:
-        st.error(f"Failed to build System 1 mix descriptors: {e}")
-        st.stop()
-
-
-# ============================================================
-# PART 2 — BUILD MIX DESCRIPTORS (System 1 + System 2 tests)
-# ============================================================
-st.markdown("---")
-st.header("2) Mix descriptors tests")
-
-# ----------------------------
-# Load pure descriptors ONCE
-# ----------------------------
-try:
-    df_pure = load_pure_descriptors(PURE_CSV_PATH)
-except Exception as e:
-    st.error(f"Could not load {PURE_CSV_PATH}: {e}")
-    st.stop()
-
-# Feature columns: everything except label/id columns
-drop_cols = {COMP_COL, "No.", "No", "ID", "Id"}
-feature_cols = [c for c in df_pure.columns if c not in drop_cols]
-
-if len(feature_cols) == 0:
-    st.error("No descriptor columns found in your Pure_descriptors.csv (feature_cols is empty).")
-    st.stop()
-
-# ============================================================
-# SYSTEM 1 TEST — SBMA + PDMS
-# ============================================================
+# -----------------------------
+# System 1 — SBMA + PDMS
+# -----------------------------
 st.subheader("System 1 — SBMA + PDMS")
 
 req_s1 = next((r for r in user_requests if r["system"] == "SBMA_PDMS"), None)
@@ -320,17 +313,17 @@ if req_s1 is None:
     st.info("Select 'SBMA + PDMS' above to run the System 1 test.")
 else:
     try:
-        # Validation
         validate_range("SBMA", req_s1["mw_a"], SBMA_MW_RANGE[0], SBMA_MW_RANGE[1])
         validate_range("PDMS", req_s1["mw_b"], PDMS_MW_RANGE[0], PDMS_MW_RANGE[1])
         validate_p("SBMA", req_s1["p_a"])
         validate_p("PDMS", req_s1["p_b"])
 
-        # Load pure rows
+        if not (SYSTEM1_A_RANGE[0] <= req_s1["A_add"] <= SYSTEM1_A_RANGE[1]):
+            raise ValueError(f"System 1 Additive Amount A must be between {SYSTEM1_A_RANGE[0]} and {SYSTEM1_A_RANGE[1]}.")
+
         row_sbma = get_pure_row(df_pure, "SBMA")
         row_pdms = get_pure_row(df_pure, "PDMS")
 
-        # Build mix
         X_mix1, (n_sbma, n_pdms) = build_mix_system1(
             row_sbma=row_sbma,
             row_pdms=row_pdms,
@@ -343,22 +336,20 @@ else:
         )
 
         st.success("✅ System 1 mix descriptors built successfully!")
-        st.write(f"SBMA monomer units (n) = {n_sbma:.6f} | PDMS monomer units (n) = {n_pdms:.6f}")
+        st.write(f"n_SBMA = MW_user/MW_monomer = {n_sbma:.6f} | n_PDMS = {n_pdms:.6f}")
         st.write(f"Additive Amount A = {req_s1['A_add']}")
         st.write(f"X_mix1 shape: {X_mix1.shape}")
 
-        if len(feature_cols) <= 12:
-            st.dataframe(pd.DataFrame(X_mix1, columns=feature_cols))
-        else:
-            st.dataframe(pd.DataFrame(X_mix1[:, :12], columns=feature_cols[:12]))
+        preview_n = min(12, len(feature_cols))
+        st.dataframe(pd.DataFrame(X_mix1[:, :preview_n], columns=feature_cols[:preview_n]))
 
     except Exception as e:
         st.error(f"Failed to build System 1 mix descriptors: {e}")
         st.stop()
 
-# ============================================================
-# SYSTEM 2 TEST — PDMS + PEG
-# ============================================================
+# -----------------------------
+# System 2 — PDMS + PEG
+# -----------------------------
 st.subheader("System 2 — PDMS + PEG")
 
 req_s2 = next((r for r in user_requests if r["system"] == "PDMS_PEG"), None)
@@ -367,23 +358,19 @@ if req_s2 is None:
     st.info("Select 'PDMS + PEG' above to run the System 2 test.")
 else:
     try:
-        # Validation
         validate_p("PDMS", req_s2["p_a"])
-        validate_p("PEG", req_s2["p_b"])
+        validate_p("PEG",  req_s2["p_b"])
 
+        # Fixed MW rules (your system 2)
         validate_fixed_mw("PDMS", req_s2["mw_a"], SYSTEM2_FIXED_MW["PDMS"])
         validate_fixed_mw("PEG",  req_s2["mw_b"], SYSTEM2_FIXED_MW["PEG"])
 
         if not (SYSTEM2_A_RANGE[0] <= req_s2["A_add"] <= SYSTEM2_A_RANGE[1]):
-            raise ValueError(
-                f"System 2 Additive Amount A must be between {SYSTEM2_A_RANGE[0]} and {SYSTEM2_A_RANGE[1]}."
-            )
+            raise ValueError(f"System 2 Additive Amount A must be between {SYSTEM2_A_RANGE[0]} and {SYSTEM2_A_RANGE[1]}.")
 
-        # Load pure rows
         row_pdms = get_pure_row(df_pure, "PDMS")
         row_peg  = get_pure_row(df_pure, "PEG")
 
-        # Build mix
         X_mix2, (n_pdms, n_peg) = build_mix_system2(
             row_pdms=row_pdms,
             row_peg=row_peg,
@@ -396,18 +383,18 @@ else:
         )
 
         st.success("✅ System 2 mix descriptors built successfully!")
-        st.write(f"PDMS monomer units (n) = {n_pdms:.6f} | PEG monomer units (n) = {n_peg:.6f}")
+        st.write(f"n_PDMS = {n_pdms:.6f} | n_PEG = {n_peg:.6f}")
         st.write(f"Additive Amount A = {req_s2['A_add']}")
         st.write(f"X_mix2 shape: {X_mix2.shape}")
 
-        if len(feature_cols) <= 12:
-            st.dataframe(pd.DataFrame(X_mix2, columns=feature_cols))
-        else:
-            st.dataframe(pd.DataFrame(X_mix2[:, :12], columns=feature_cols[:12]))
+        preview_n = min(12, len(feature_cols))
+        st.dataframe(pd.DataFrame(X_mix2[:, :preview_n], columns=feature_cols[:preview_n]))
 
     except Exception as e:
         st.error(f"Failed to build System 2 mix descriptors: {e}")
         st.stop()
+
+
 
 
 
