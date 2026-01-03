@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import os
 
 # ============================================================
 # Page configuration (must be the first Streamlit command)
@@ -15,9 +14,9 @@ st.image("fouling_boat.png", use_container_width=True)
 st.title("Fouling Release Predictor")
 
 # ============================================================
-# DATA HELPERS (Pure descriptors)
-# Your repo file is named: "Pure_descriptors.csv"
-# Your CSV has a column named: "Comp" (PDMS, PEG, SBMA, PMHS)
+# Pure descriptors CSV
+# Your CSV file name in the repo: "Pure_descriptors.csv"
+# Your component column name: "Comp"  (PDMS, PEG, SBMA, PMHS)
 # ============================================================
 PURE_CSV_PATH = "Pure_descriptors.csv"
 
@@ -29,7 +28,6 @@ def load_pure_descriptors(path=PURE_CSV_PATH) -> pd.DataFrame:
     if "Comp" not in df.columns:
         raise ValueError(f"{path} must include a column named 'Comp'.")
 
-    # Standardize component label
     df["Comp"] = df["Comp"].astype(str).str.strip().str.upper()
     return df
 
@@ -47,11 +45,21 @@ def validate_range(name: str, mw_value: float, mw_min: float, mw_max: float):
 
 # ============================================================
 # MIX DESCRIPTORS — System 1 rule (SBMA + PDMS)
-# fraction = monomerMW / userMW
-# mix = SBMA * fraction * % + PDMS * fraction * %
+#
+# IMPORTANT (scientific meaning):
+# We scale pure descriptors by the EFFECTIVE NUMBER OF MONOMERIC UNITS:
+#   n_monomers = MW_user / MW_monomer
+#
+# Then we weight by coating percentage and sum both components:
+#   mix = (D_SBMA * n_SBMA * p_SBMA) + (D_PDMS * n_PDMS * p_PDMS)
+# where p = (% / 100).
 # ============================================================
-SBMA_MONOMER_MW = 279.3566
-PDMS_MONOMER_MW = 74.1535
+MONOMER_MW = {
+    "SBMA": 279.3566,
+    "PDMS": 74.1535,
+    "PEG":  62.0668,   # (for later systems)
+    "PMHS": None       # (we will fill later)
+}
 
 SBMA_MW_RANGE = (500.0, 2500.0)
 PDMS_MW_RANGE = (1000.0, 5000.0)
@@ -65,22 +73,23 @@ def build_mix_system1(
     mw_pdms: float,
     perc_pdms: float,
 ):
-    # percentages to fractions
+    # percentages to fractions (0–1)
     p_sbma = float(perc_sbma) / 100.0
     p_pdms = float(perc_pdms) / 100.0
 
-    # monomer fraction
-    f_sbma = float(SBMA_MONOMER_MW) / float(mw_sbma)
-    f_pdms = float(PDMS_MONOMER_MW) / float(mw_pdms)
+    # effective number of monomeric units (monomers)
+    # n_monomers = MW_user / MW_monomer
+    n_sbma = float(mw_sbma) / float(MONOMER_MW["SBMA"])
+    n_pdms = float(mw_pdms) / float(MONOMER_MW["PDMS"])
 
     # descriptor vectors
     vec_sbma = row_sbma[feature_cols].astype(float).to_numpy()
     vec_pdms = row_pdms[feature_cols].astype(float).to_numpy()
 
-    # YOUR mixing rule (this is the X_mix that goes into the ML model)
-    mix = (vec_sbma * f_sbma * p_sbma) + (vec_pdms * f_pdms * p_pdms)
+    # mixed descriptors (this X_mix goes into the ML model)
+    mix = (vec_sbma * n_sbma * p_sbma) + (vec_pdms * n_pdms * p_pdms)
 
-    return mix.reshape(1, -1), (f_sbma, f_pdms)
+    return mix.reshape(1, -1), (n_sbma, n_pdms)
 
 # ============================================================
 # PART 1 — MULTI-SYSTEM INPUT (UI only)
@@ -153,9 +162,6 @@ st.dataframe(user_requests)
 st.markdown("---")
 st.header("2) System 1 test — SBMA + PDMS (mix descriptors)")
 
-# (Optional) quick debug to see what files Streamlit sees
-# st.write("Files in current directory:", os.listdir("."))
-
 # Load pure descriptors
 try:
     df_pure = load_pure_descriptors(PURE_CSV_PATH)
@@ -163,7 +169,7 @@ except Exception as e:
     st.error(f"Could not load {PURE_CSV_PATH}: {e}")
     st.stop()
 
-# Feature columns = all columns except the component label column
+# Feature columns = all columns except Comp
 feature_cols = [c for c in df_pure.columns if c != "Comp"]
 
 req_s1 = next((r for r in user_requests if r["system"] == "SBMA_PDMS"), None)
@@ -171,7 +177,7 @@ req_s1 = next((r for r in user_requests if r["system"] == "SBMA_PDMS"), None)
 if req_s1 is None:
     st.info("Select 'SBMA + PDMS' above to run the System 1 test.")
 else:
-    # For System 1, we assume:
+    # System 1 mapping:
     # A = SBMA  (mw_a, perc_a)
     # B = PDMS  (mw_b, perc_b)
     try:
@@ -189,25 +195,23 @@ else:
         st.stop()
 
     try:
-        X_mix, (f_sbma, f_pdms) = build_mix_system1(
+        X_mix, (n_sbma, n_pdms) = build_mix_system1(
             row_sbma, row_pdms, feature_cols,
             req_s1["mw_a"], req_s1["perc_a"],
             req_s1["mw_b"], req_s1["perc_b"]
         )
 
         st.success("✅ System 1 mix descriptors built successfully!")
-        st.write(f"SBMA fraction = {f_sbma:.6f} | PDMS fraction = {f_pdms:.6f}")
+        st.write(f"SBMA monomer units (n) = {n_sbma:.6f} | PDMS monomer units (n) = {n_pdms:.6f}")
         st.write(f"X_mix shape: {X_mix.shape}")
 
-        preview_n = min(12, len(feature_cols))
-        st.dataframe(pd.DataFrame(X_mix[:, :preview_n], columns=feature_cols[:preview_n]))
+        # show all if few, otherwise show first 12
+        if len(feature_cols) <= 12:
+            st.dataframe(pd.DataFrame(X_mix, columns=feature_cols))
+        else:
+            preview_n = 12
+            st.dataframe(pd.DataFrame(X_mix[:, :preview_n], columns=feature_cols[:preview_n]))
 
     except Exception as e:
         st.error(f"Failed to build System 1 mix descriptors: {e}")
         st.stop()
-
-
-
-
-
-
