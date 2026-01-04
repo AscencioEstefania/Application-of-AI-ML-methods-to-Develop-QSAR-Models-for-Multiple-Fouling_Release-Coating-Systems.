@@ -71,6 +71,12 @@ def validate_fixed_mw(name: str, mw_value: float, allowed_value: float, tol: flo
         raise ValueError(f"{name} MW must be exactly {allowed_value}. You entered {mw_value}.")
 
 
+def validate_total_wt(name: str, wt_value: float, wt_min: float, wt_max: float):
+    wt = float(wt_value)
+    if not (wt_min <= wt <= wt_max):
+        raise ValueError(f"{name} must be between {wt_min} and {wt_max}. You entered {wt_value}.")
+
+
 def make_feature_matrix_safe(row: pd.Series, feature_cols: list) -> np.ndarray:
     """
     Converts descriptor columns to float safely.
@@ -98,7 +104,7 @@ MONOMER_MW = {
     "SBMA": 279.3566,
     "PDMS": 74.1535,
     "PEG":  62.0668,
-    # PMHS not used yet here
+    "PMHS": 62.1600,   # <- System 3
 }
 
 # ============================================================
@@ -115,10 +121,25 @@ SYSTEM2_FIXED_MW = {"PDMS": 750.0, "PEG": 1000.0}
 SYSTEM2_A_RANGE = (0.10, 0.40)
 
 # ============================================================
-# MIX builders (your formula)
-# n = MW_user / MW_monomer
-# mix = A * (D_A*n_A*p_A + D_B*n_B*p_B)
-# p is already 0–1 (NO /100)
+# System 3 (PEG + PMHS) constraints (your special case)
+# - MW ranges: 240–2100 for both
+# - NO individual wt% (no pPEG, pPMHS)
+# - total wt% (PEG + PMHS) in 0.01–0.10
+# ============================================================
+SYSTEM3_PEG_MW_RANGE  = (240.0, 2100.0)
+SYSTEM3_PMHS_MW_RANGE = (240.0, 2100.0)
+SYSTEM3_WTOTAL_RANGE  = (0.01, 0.10)
+
+# ============================================================
+# MIX builders
+# System 1 & 2 (as you had):
+#   n = MW_user / MW_monomer
+#   mix = A * (D_A*n_A*p_A + D_B*n_B*p_B)
+#
+# System 3 (your rule):
+#   n = MW_user / MW_monomer
+#   mix = wt_total * (D_PEG*n_PEG + D_PMHS*n_PMHS)
+#   (NO p split, NO 50/50 assumption)
 # ============================================================
 def build_mix_system1(
     row_sbma: pd.Series,
@@ -160,6 +181,24 @@ def build_mix_system2(
     return mix.reshape(1, -1), (n_pdms, n_peg)
 
 
+def build_mix_system3(
+    row_peg: pd.Series,
+    row_pmhs: pd.Series,
+    feature_cols: list,
+    mw_peg: float,
+    mw_pmhs: float,
+    wt_total: float  # total (PEG + PMHS) in [0.01, 0.10]
+):
+    n_peg  = float(mw_peg)  / float(MONOMER_MW["PEG"])
+    n_pmhs = float(mw_pmhs) / float(MONOMER_MW["PMHS"])
+
+    vec_peg  = make_feature_matrix_safe(row_peg,  feature_cols)
+    vec_pmhs = make_feature_matrix_safe(row_pmhs, feature_cols)
+
+    mix = float(wt_total) * ((vec_peg * n_peg) + (vec_pmhs * n_pmhs))
+    return mix.reshape(1, -1), (n_peg, n_pmhs)
+
+
 # ============================================================
 # PART 1 — MULTI-SYSTEM INPUT (UI)
 # ============================================================
@@ -169,7 +208,7 @@ st.header("1) Select coating system(s)")
 SYSTEMS = {
     "SBMA + PDMS": "SBMA_PDMS",
     "PDMS + PEG": "PDMS_PEG",
-    "PEG + PMHS": "PEG_PMHS",  # (not implemented yet)
+    "PEG + PMHS": "PEG_PMHS",
 }
 
 mode = st.radio("What do you want to evaluate?", ["Only one system", "All systems"], horizontal=True)
@@ -184,6 +223,41 @@ else:
 def system_expander(label: str):
     sys_code = SYSTEMS[label]
     with st.expander(f"System: {label}", expanded=(mode == "Only one system")):
+        # ---- System 3 special UI (NO p split) ----
+        if sys_code == "PEG_PMHS":
+            c1, c2 = st.columns(2)
+
+            wt_total = st.number_input(
+                f"[{label}] Total wt% (PEG + PMHS)  [0.01–0.10]",
+                min_value=SYSTEM3_WTOTAL_RANGE[0],
+                max_value=SYSTEM3_WTOTAL_RANGE[1],
+                value=SYSTEM3_WTOTAL_RANGE[0],
+                step=0.001,
+                format="%.3f",
+                key=f"{sys_code}_wt_total"
+            )
+
+            with c1:
+                mw_a = st.number_input(
+                    f"[{label}] MW PEG",
+                    min_value=0.0, value=240.0, step=10.0,
+                    key=f"{sys_code}_mw_peg"
+                )
+            with c2:
+                mw_b = st.number_input(
+                    f"[{label}] MW PMHS",
+                    min_value=0.0, value=240.0, step=10.0,
+                    key=f"{sys_code}_mw_pmhs"
+                )
+
+            st.caption("System 3 uses ONLY total wt% (PEG+PMHS). No individual p values, no 50/50 assumption.")
+            return {
+                "system": sys_code,
+                "mw_a": mw_a, "mw_b": mw_b,
+                "wt_total": wt_total,
+            }
+
+        # ---- Systems 1 & 2 (original UI) ----
         c1, c2 = st.columns(2)
 
         # ---- Additive Amount A (depends on system) ----
@@ -286,7 +360,7 @@ st.subheader("Current inputs (debug)")
 st.dataframe(user_requests)
 
 # ============================================================
-# PART 2 — BUILD MIX DESCRIPTORS (System 1 & System 2)
+# PART 2 — BUILD MIX DESCRIPTORS (System 1, 2, 3)
 # ============================================================
 st.markdown("---")
 st.header("2) Mix descriptors tests")
@@ -393,6 +467,49 @@ else:
     except Exception as e:
         st.error(f"Failed to build System 2 mix descriptors: {e}")
         st.stop()
+
+# -----------------------------
+# System 3 — PEG + PMHS (SPECIAL)
+# -----------------------------
+st.subheader("System 3 — PEG + PMHS (total wt% only)")
+
+req_s3 = next((r for r in user_requests if r["system"] == "PEG_PMHS"), None)
+
+if req_s3 is None:
+    st.info("Select 'PEG + PMHS' above to run the System 3 test.")
+else:
+    try:
+        # MW ranges
+        validate_range("PEG",  req_s3["mw_a"], SYSTEM3_PEG_MW_RANGE[0],  SYSTEM3_PEG_MW_RANGE[1])
+        validate_range("PMHS", req_s3["mw_b"], SYSTEM3_PMHS_MW_RANGE[0], SYSTEM3_PMHS_MW_RANGE[1])
+
+        # total wt% rule
+        validate_total_wt("Total wt% (PEG+PMHS)", req_s3["wt_total"], SYSTEM3_WTOTAL_RANGE[0], SYSTEM3_WTOTAL_RANGE[1])
+
+        row_peg  = get_pure_row(df_pure, "PEG")
+        row_pmhs = get_pure_row(df_pure, "PMHS")
+
+        X_mix3, (n_peg, n_pmhs) = build_mix_system3(
+            row_peg=row_peg,
+            row_pmhs=row_pmhs,
+            feature_cols=feature_cols,
+            mw_peg=req_s3["mw_a"],
+            mw_pmhs=req_s3["mw_b"],
+            wt_total=req_s3["wt_total"],
+        )
+
+        st.success("✅ System 3 mix descriptors built successfully!")
+        st.write(f"n_PEG = MW_user/MW_monomer = {n_peg:.6f} | n_PMHS = {n_pmhs:.6f}")
+        st.write(f"Total wt% (PEG+PMHS) = {req_s3['wt_total']}")
+        st.write(f"X_mix3 shape: {X_mix3.shape}")
+
+        preview_n = min(12, len(feature_cols))
+        st.dataframe(pd.DataFrame(X_mix3[:, :preview_n], columns=feature_cols[:preview_n]))
+
+    except Exception as e:
+        st.error(f"Failed to build System 3 mix descriptors: {e}")
+        st.stop()
+
 
 
 
