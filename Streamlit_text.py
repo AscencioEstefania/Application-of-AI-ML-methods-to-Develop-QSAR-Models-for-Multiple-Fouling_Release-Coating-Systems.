@@ -526,32 +526,78 @@ st.markdown("---")
 st.header("3) Model prediction")
 
 from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import GradientBoostingRegressor
 import joblib
 
 # ------------------------------------------------------------
 # Paths
 # ------------------------------------------------------------
 TRAIN_CSV_PATH = "1_data/5_N_incerta_10_psi_training.csv"
-MODEL_PATH = "models/best_gbr_model.joblib"   # <- change to your real file
+MODEL_PATH = "models/best_gbr_model.joblib"  # <- change to your real file name
 
 # Model features (fixed)
 MODEL_FEATURES = ["ATSC2se", "ATSC5i", "Xp-4dv", "IC4"]
 
 
+def read_training_csv(path: str) -> pd.DataFrame:
+    """
+    Robust CSV reader:
+    - tries comma first
+    - if only 1 column, retries with semicolon
+    - strips column names
+    """
+    df = pd.read_csv(path, encoding="UTF-8")  # comma by default
+    if df.shape[1] == 1:
+        df = pd.read_csv(path, encoding="UTF-8", delimiter=";")
+    df.columns = df.columns.astype(str).str.strip()
+    return df
+
+
 @st.cache_resource
-def load_scaler_and_model(train_csv_path, model_path):
-    # ---- Load training data (same as training script) ----
-    data = pd.read_csv(train_csv_path, encoding="UTF-8", delimiter=";")
-    data["prediction_training"] = data["prediction_training"].str.strip()
+def load_scaler_and_model(train_csv_path: str, model_path: str):
+    # ---- Load training data (robust) ----
+    data = read_training_csv(train_csv_path)
+
+    # ---- Validate required column ----
+    if "prediction_training" not in data.columns:
+        raise KeyError(
+            "Column 'prediction_training' not found in training CSV. "
+            f"Found columns: {list(data.columns)[:30]}"
+        )
+
+    # ---- Clean split column ----
+    data["prediction_training"] = (
+        data["prediction_training"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
 
     train_data = data[data["prediction_training"] == "training"]
+    if train_data.empty:
+        raise ValueError(
+            "No rows found with prediction_training == 'training'. "
+            "Check the values inside that column."
+        )
 
-    X_train = train_data[MODEL_FEATURES]
+    # ---- Validate model feature columns ----
+    missing_feats = [f for f in MODEL_FEATURES if f not in data.columns]
+    if missing_feats:
+        raise KeyError(
+            "These MODEL_FEATURES are missing from the training CSV: "
+            + ", ".join(missing_feats)
+        )
+
+    X_train = train_data[MODEL_FEATURES].apply(pd.to_numeric, errors="coerce")
+    if X_train.isna().any().any():
+        bad = X_train.columns[X_train.isna().any()].tolist()
+        raise ValueError(
+            "NaN detected in training features after numeric conversion: "
+            + ", ".join(bad)
+        )
 
     # ---- Fit scaler ONLY on training data ----
     scaler = StandardScaler()
-    scaler.fit(X_train)
+    scaler.fit(X_train.values)
 
     # ---- Load trained model ----
     if not os.path.exists(model_path):
@@ -562,15 +608,22 @@ def load_scaler_and_model(train_csv_path, model_path):
     return scaler, model
 
 
-def prepare_X_for_model(X_mix, feature_cols):
+def prepare_X_for_model(X_mix: np.ndarray, all_feature_cols: list) -> np.ndarray:
     """
     Extracts MODEL_FEATURES from X_mix in correct order.
     """
-    idx = [feature_cols.index(f) for f in MODEL_FEATURES]
+    missing = [f for f in MODEL_FEATURES if f not in all_feature_cols]
+    if missing:
+        raise ValueError(
+            "MODEL_FEATURES are missing from feature_cols (Pure_descriptors.csv columns): "
+            + ", ".join(missing)
+        )
+
+    idx = [all_feature_cols.index(f) for f in MODEL_FEATURES]
     X_model = X_mix[:, idx].astype(float)
 
     if np.isnan(X_model).any():
-        raise ValueError("NaN detected in model input features.")
+        raise ValueError("NaN detected in model input features (X_model).")
 
     return X_model
 
@@ -581,6 +634,16 @@ try:
     st.success("✅ Scaler and model loaded successfully")
 except Exception as e:
     st.error(f"Failed to load scaler/model: {e}")
+    # Helpful debug:
+    try:
+        tmp = read_training_csv(TRAIN_CSV_PATH)
+        st.write("DEBUG — Training CSV columns:", list(tmp.columns))
+        st.write("DEBUG — Training CSV shape:", tmp.shape)
+        st.write("DEBUG — prediction_training unique values (if exists):",
+                 tmp["prediction_training"].astype(str).str.strip().unique()
+                 if "prediction_training" in tmp.columns else "Column not found")
+    except Exception as e2:
+        st.write(f"DEBUG — Could not even read training CSV: {e2}")
     st.stop()
 
 
@@ -609,10 +672,10 @@ else:
 
         for system_name, X_mix in mix_map.items():
             try:
-                # 1) select features
+                # 1) select features from X_mix
                 X_model = prepare_X_for_model(X_mix, feature_cols)
 
-                # 2) scale (same scaler as training)
+                # 2) scale with training scaler
                 X_scaled = scaler.transform(X_model)
 
                 # 3) predict
@@ -620,7 +683,7 @@ else:
 
                 results.append({
                     "System": system_name,
-                    "Prediction": float(y_hat[0])
+                    "Prediction": float(np.array(y_hat).ravel()[0])
                 })
 
             except Exception as e:
@@ -640,5 +703,3 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv"
         )
-
-
