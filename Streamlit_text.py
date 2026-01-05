@@ -429,8 +429,8 @@ for label in systems_to_show:
     if out is not None:
         user_requests.append(out)
 
-st.subheader("Current inputs (debug)")
-st.dataframe(user_requests)
+#st.subheader("Current inputs (debug)")
+#st.dataframe(user_requests)
 
 # ============================================================
 # PART 2 — BUILD MIX DESCRIPTORS (System 1, 2, 3)
@@ -794,4 +794,5 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
 
