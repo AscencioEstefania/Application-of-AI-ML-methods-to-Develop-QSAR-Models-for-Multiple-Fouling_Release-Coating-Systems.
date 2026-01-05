@@ -1,7 +1,6 @@
 streamlit
 pandas
 numpy
-scikit-learn
+scikit-learn==1.5.1
 joblib
 matplotlib
-scikit-learn==1.5.1
