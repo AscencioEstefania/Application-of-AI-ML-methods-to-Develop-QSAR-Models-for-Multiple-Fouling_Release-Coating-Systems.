@@ -655,6 +655,7 @@ else:
                 })
 
         df_out = pd.DataFrame(rows)
+        st.subheader("N. incerta removal at 10 psi")
         st.dataframe(style_confidence(df_out), use_container_width=True)
 
         st.download_button(
@@ -663,6 +664,7 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
 
 
 
