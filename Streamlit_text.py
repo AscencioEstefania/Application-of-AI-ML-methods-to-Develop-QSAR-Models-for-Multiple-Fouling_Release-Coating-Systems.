@@ -104,12 +104,12 @@ def make_feature_matrix_safe(row: pd.Series, feature_cols: list) -> np.ndarray:
 MONOMER_MW = {
     "SBMA": 279.3566,
     "PDMS": 74.1535,
-    "PEG":  62.0668,
-    "PMHS": 62.1600,   # <- System 3
+    "PEG": 62.0668,
+    "PMHS": 62.1600,  # <- System 3
 }
 
 # ============================================================
-# System 1 (SBMA + PDMS) constraints
+# System 1 (SBMA + PDMS) constraints  (YOUR SYSTEM 1)
 # ============================================================
 SBMA_MW_RANGE = (500.0, 2500.0)
 PDMS_MW_RANGE = (1000.0, 5000.0)
@@ -127,9 +127,9 @@ SYSTEM2_A_RANGE = (0.10, 0.40)
 # - NO individual wt% (no pPEG, pPMHS)
 # - total wt% (PEG + PMHS) in 0.01–0.10
 # ============================================================
-SYSTEM3_PEG_MW_RANGE  = (240.0, 2100.0)
+SYSTEM3_PEG_MW_RANGE = (240.0, 2100.0)
 SYSTEM3_PMHS_MW_RANGE = (240.0, 2100.0)
-SYSTEM3_WTOTAL_RANGE  = (0.01, 0.10)
+SYSTEM3_WTOTAL_RANGE = (0.01, 0.10)
 
 # ============================================================
 # MIX builders
@@ -142,7 +142,7 @@ def build_mix_system1(
     p_sbma: float,
     mw_pdms: float,
     p_pdms: float,
-    additive_amount: float
+    additive_amount: float,
 ):
     n_sbma = float(mw_sbma) / float(MONOMER_MW["SBMA"])
     n_pdms = float(mw_pdms) / float(MONOMER_MW["PDMS"])
@@ -150,7 +150,9 @@ def build_mix_system1(
     vec_sbma = make_feature_matrix_safe(row_sbma, feature_cols)
     vec_pdms = make_feature_matrix_safe(row_pdms, feature_cols)
 
-    mix = float(additive_amount) * ((vec_sbma * n_sbma * float(p_sbma)) + (vec_pdms * n_pdms * float(p_pdms)))
+    mix = float(additive_amount) * (
+        (vec_sbma * n_sbma * float(p_sbma)) + (vec_pdms * n_pdms * float(p_pdms))
+    )
     return mix.reshape(1, -1), (n_sbma, n_pdms)
 
 
@@ -162,15 +164,17 @@ def build_mix_system2(
     p_pdms: float,
     mw_peg: float,
     p_peg: float,
-    additive_amount: float
+    additive_amount: float,
 ):
     n_pdms = float(mw_pdms) / float(MONOMER_MW["PDMS"])
-    n_peg  = float(mw_peg)  / float(MONOMER_MW["PEG"])
+    n_peg = float(mw_peg) / float(MONOMER_MW["PEG"])
 
     vec_pdms = make_feature_matrix_safe(row_pdms, feature_cols)
-    vec_peg  = make_feature_matrix_safe(row_peg,  feature_cols)
+    vec_peg = make_feature_matrix_safe(row_peg, feature_cols)
 
-    mix = float(additive_amount) * ((vec_pdms * n_pdms * float(p_pdms)) + (vec_peg * n_peg * float(p_peg)))
+    mix = float(additive_amount) * (
+        (vec_pdms * n_pdms * float(p_pdms)) + (vec_peg * n_peg * float(p_peg))
+    )
     return mix.reshape(1, -1), (n_pdms, n_peg)
 
 
@@ -180,12 +184,12 @@ def build_mix_system3(
     feature_cols: list,
     mw_peg: float,
     mw_pmhs: float,
-    wt_total: float
+    wt_total: float,
 ):
-    n_peg  = float(mw_peg)  / float(MONOMER_MW["PEG"])
+    n_peg = float(mw_peg) / float(MONOMER_MW["PEG"])
     n_pmhs = float(mw_pmhs) / float(MONOMER_MW["PMHS"])
 
-    vec_peg  = make_feature_matrix_safe(row_peg,  feature_cols)
+    vec_peg = make_feature_matrix_safe(row_peg, feature_cols)
     vec_pmhs = make_feature_matrix_safe(row_pmhs, feature_cols)
 
     mix = float(wt_total) * ((vec_peg * n_peg) + (vec_pmhs * n_pmhs))
@@ -222,58 +226,65 @@ def system_expander(label: str):
             c1, c2 = st.columns(2)
 
             wt_total = st.number_input(
-                f"[{label}] Total wt% (PEG + PMHS)  [0.01–0.10]",
+                f"[{label}] Total wt% (PEG + PMHS)  [{SYSTEM3_WTOTAL_RANGE[0]}–{SYSTEM3_WTOTAL_RANGE[1]}]",
                 min_value=SYSTEM3_WTOTAL_RANGE[0],
                 max_value=SYSTEM3_WTOTAL_RANGE[1],
                 value=SYSTEM3_WTOTAL_RANGE[0],
                 step=0.001,
                 format="%.3f",
-                key=f"{sys_code}_wt_total"
+                key=f"{sys_code}_wt_total",
             )
 
             with c1:
                 mw_a = st.number_input(
-                    f"[{label}] MW PEG",
-                    min_value=0.0, value=240.0, step=10.0,
-                    key=f"{sys_code}_mw_peg"
+                    f"[{label}] MW PEG  [{SYSTEM3_PEG_MW_RANGE[0]}–{SYSTEM3_PEG_MW_RANGE[1]}]",
+                    min_value=SYSTEM3_PEG_MW_RANGE[0],
+                    max_value=SYSTEM3_PEG_MW_RANGE[1],
+                    value=SYSTEM3_PEG_MW_RANGE[0],
+                    step=10.0,
+                    key=f"{sys_code}_mw_peg",
                 )
             with c2:
                 mw_b = st.number_input(
-                    f"[{label}] MW PMHS",
-                    min_value=0.0, value=240.0, step=10.0,
-                    key=f"{sys_code}_mw_pmhs"
+                    f"[{label}] MW PMHS  [{SYSTEM3_PMHS_MW_RANGE[0]}–{SYSTEM3_PMHS_MW_RANGE[1]}]",
+                    min_value=SYSTEM3_PMHS_MW_RANGE[0],
+                    max_value=SYSTEM3_PMHS_MW_RANGE[1],
+                    value=SYSTEM3_PMHS_MW_RANGE[0],
+                    step=10.0,
+                    key=f"{sys_code}_mw_pmhs",
                 )
 
             st.caption("System 3 uses ONLY total wt% (PEG+PMHS). No individual p values, no 50/50 assumption.")
             return {
                 "system": sys_code,
-                "mw_a": mw_a, "mw_b": mw_b,
+                "mw_a": mw_a,
+                "mw_b": mw_b,
                 "wt_total": wt_total,
             }
 
-        # ---- Systems 1 & 2 (original UI) ----
+        # ---- Systems 1 & 2 ----
         c1, c2 = st.columns(2)
 
         # ---- Additive Amount A (depends on system) ----
         if sys_code == "SBMA_PDMS":
             A_add = st.number_input(
-                f"[{label}] Additive Amount A",
+                f"[{label}] Additive Amount A  [{SYSTEM1_A_RANGE[0]}–{SYSTEM1_A_RANGE[1]}]",
                 min_value=SYSTEM1_A_RANGE[0],
                 max_value=SYSTEM1_A_RANGE[1],
                 value=SYSTEM1_A_RANGE[0],
                 step=0.001,
                 format="%.3f",
-                key=f"{sys_code}_A_add"
+                key=f"{sys_code}_A_add",
             )
         elif sys_code == "PDMS_PEG":
             A_add = st.number_input(
-                f"[{label}] Additive Amount A",
+                f"[{label}] Additive Amount A  [{SYSTEM2_A_RANGE[0]}–{SYSTEM2_A_RANGE[1]}]",
                 min_value=SYSTEM2_A_RANGE[0],
                 max_value=SYSTEM2_A_RANGE[1],
                 value=SYSTEM2_A_RANGE[0],
                 step=0.01,
                 format="%.2f",
-                key=f"{sys_code}_A_add"
+                key=f"{sys_code}_A_add",
             )
         else:
             A_add = st.number_input(
@@ -282,53 +293,81 @@ def system_expander(label: str):
                 max_value=1.0,
                 value=0.01,
                 step=0.01,
-                key=f"{sys_code}_A_add"
+                key=f"{sys_code}_A_add",
             )
 
         with c1:
             # MW A
             if sys_code == "PDMS_PEG":
                 mw_a = st.selectbox(
-                    f"[{label}] MW component A (PDMS fixed)",
+                    f"[{label}] MW component A (PDMS fixed)  [{SYSTEM2_FIXED_MW['PDMS']}]",
                     options=[SYSTEM2_FIXED_MW["PDMS"]],
-                    key=f"{sys_code}_mw_a_select"
+                    key=f"{sys_code}_mw_a_select",
                 )
                 mw_a = float(mw_a)
+            elif sys_code == "SBMA_PDMS":
+                mw_a = st.number_input(
+                    f"[{label}] MW component A (SBMA)  [{SBMA_MW_RANGE[0]}–{SBMA_MW_RANGE[1]}]",
+                    min_value=SBMA_MW_RANGE[0],
+                    max_value=SBMA_MW_RANGE[1],
+                    value=SBMA_MW_RANGE[0],
+                    step=10.0,
+                    key=f"{sys_code}_mw_a",
+                )
             else:
                 mw_a = st.number_input(
                     f"[{label}] MW component A",
-                    min_value=0.0, value=1000.0, step=10.0,
-                    key=f"{sys_code}_mw_a"
+                    min_value=0.0,
+                    value=1000.0,
+                    step=10.0,
+                    key=f"{sys_code}_mw_a",
                 )
 
             # p A (0-1)
             p_a = st.number_input(
-                f"[{label}] p (0–1) component A",
-                min_value=0.0, max_value=1.0, value=0.5, step=0.01,
-                key=f"{sys_code}_p_a"
+                f"[{label}] p (0–1) component A  [0–1]",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.01,
+                key=f"{sys_code}_p_a",
             )
 
         with c2:
             # MW B
             if sys_code == "PDMS_PEG":
                 mw_b = st.selectbox(
-                    f"[{label}] MW component B (PEG fixed)",
+                    f"[{label}] MW component B (PEG fixed)  [{SYSTEM2_FIXED_MW['PEG']}]",
                     options=[SYSTEM2_FIXED_MW["PEG"]],
-                    key=f"{sys_code}_mw_b_select"
+                    key=f"{sys_code}_mw_b_select",
                 )
                 mw_b = float(mw_b)
+            elif sys_code == "SBMA_PDMS":
+                mw_b = st.number_input(
+                    f"[{label}] MW component B (PDMS)  [{PDMS_MW_RANGE[0]}–{PDMS_MW_RANGE[1]}]",
+                    min_value=PDMS_MW_RANGE[0],
+                    max_value=PDMS_MW_RANGE[1],
+                    value=PDMS_MW_RANGE[0],
+                    step=10.0,
+                    key=f"{sys_code}_mw_b",
+                )
             else:
                 mw_b = st.number_input(
                     f"[{label}] MW component B",
-                    min_value=0.0, value=1000.0, step=10.0,
-                    key=f"{sys_code}_mw_b"
+                    min_value=0.0,
+                    value=1000.0,
+                    step=10.0,
+                    key=f"{sys_code}_mw_b",
                 )
 
             # p B (0-1)
             p_b = st.number_input(
-                f"[{label}] p (0–1) component B",
-                min_value=0.0, max_value=1.0, value=0.5, step=0.01,
-                key=f"{sys_code}_p_b"
+                f"[{label}] p (0–1) component B  [0–1]",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.01,
+                key=f"{sys_code}_p_b",
             )
 
         if (p_a + p_b) == 0:
@@ -338,8 +377,10 @@ def system_expander(label: str):
         st.caption("Next step: connect this to your descriptor-based ML model.")
         return {
             "system": sys_code,
-            "mw_a": mw_a, "p_a": p_a,
-            "mw_b": mw_b, "p_b": p_b,
+            "mw_a": mw_a,
+            "p_a": p_a,
+            "mw_b": mw_b,
+            "p_b": p_b,
             "A_add": A_add,
         }
 
@@ -407,7 +448,7 @@ else:
             p_sbma=req_s1["p_a"],
             mw_pdms=req_s1["mw_b"],
             p_pdms=req_s1["p_b"],
-            additive_amount=req_s1["A_add"]
+            additive_amount=req_s1["A_add"],
         )
 
         st.success("✅ System 1 mix descriptors built successfully!")
@@ -434,10 +475,10 @@ if req_s2 is None:
 else:
     try:
         validate_p("PDMS", req_s2["p_a"])
-        validate_p("PEG",  req_s2["p_b"])
+        validate_p("PEG", req_s2["p_b"])
 
         validate_fixed_mw("PDMS", req_s2["mw_a"], SYSTEM2_FIXED_MW["PDMS"])
-        validate_fixed_mw("PEG",  req_s2["mw_b"], SYSTEM2_FIXED_MW["PEG"])
+        validate_fixed_mw("PEG", req_s2["mw_b"], SYSTEM2_FIXED_MW["PEG"])
 
         if not (SYSTEM2_A_RANGE[0] <= req_s2["A_add"] <= SYSTEM2_A_RANGE[1]):
             raise ValueError(
@@ -445,7 +486,7 @@ else:
             )
 
         row_pdms = get_pure_row(df_pure, "PDMS")
-        row_peg  = get_pure_row(df_pure, "PEG")
+        row_peg = get_pure_row(df_pure, "PEG")
 
         X_mix2, (n_pdms, n_peg) = build_mix_system2(
             row_pdms=row_pdms,
@@ -455,7 +496,7 @@ else:
             p_pdms=req_s2["p_a"],
             mw_peg=req_s2["mw_b"],
             p_peg=req_s2["p_b"],
-            additive_amount=req_s2["A_add"]
+            additive_amount=req_s2["A_add"],
         )
 
         st.success("✅ System 2 mix descriptors built successfully!")
@@ -471,7 +512,7 @@ else:
         st.stop()
 
 # -----------------------------
-# System 3 — PEG + PMHS  (THIS IS WHAT WAS MISSING)
+# System 3 — PEG + PMHS
 # -----------------------------
 st.subheader("System 3 — PEG + PMHS")
 
@@ -485,13 +526,13 @@ else:
             "System 3 total wt% (PEG + PMHS)",
             req_s3["wt_total"],
             SYSTEM3_WTOTAL_RANGE[0],
-            SYSTEM3_WTOTAL_RANGE[1]
+            SYSTEM3_WTOTAL_RANGE[1],
         )
 
-        validate_range("PEG",  req_s3["mw_a"], SYSTEM3_PEG_MW_RANGE[0],  SYSTEM3_PEG_MW_RANGE[1])
+        validate_range("PEG", req_s3["mw_a"], SYSTEM3_PEG_MW_RANGE[0], SYSTEM3_PEG_MW_RANGE[1])
         validate_range("PMHS", req_s3["mw_b"], SYSTEM3_PMHS_MW_RANGE[0], SYSTEM3_PMHS_MW_RANGE[1])
 
-        row_peg  = get_pure_row(df_pure, "PEG")
+        row_peg = get_pure_row(df_pure, "PEG")
         row_pmhs = get_pure_row(df_pure, "PMHS")
 
         X_mix3, (n_peg, n_pmhs) = build_mix_system3(
@@ -500,7 +541,7 @@ else:
             feature_cols=feature_cols,
             mw_peg=req_s3["mw_a"],
             mw_pmhs=req_s3["mw_b"],
-            wt_total=req_s3["wt_total"]
+            wt_total=req_s3["wt_total"],
         )
 
         st.success("✅ System 3 mix descriptors built successfully!")
@@ -515,25 +556,20 @@ else:
         st.error(f"Failed to build System 3 mix descriptors: {e}")
         st.stop()
 
-
-
-
-
 # ============================================================
-# PART 3 — CONNECT MODEL (WITH INTERNAL SCALING)
+# PART 3 — CONNECT MODEL (WITH INTERNAL SCALING + AD TABLE)
 # ============================================================
 st.markdown("---")
 st.header("3) Model prediction")
 
 from sklearn.preprocessing import StandardScaler
 import pickle
-import os
 
 # ------------------------------------------------------------
 # Paths
 # ------------------------------------------------------------
 TRAIN_CSV_PATH = "1_data/5_N_incerta_10_psi_training.csv"
-MODEL_PATH = "best_gbr_model.pkl"  # correct (file is in repo root)
+MODEL_PATH = "best_gbr_model.pkl"  # file is in repo root
 
 # Model features (fixed)
 MODEL_FEATURES = ["ATSC2se", "ATSC5i", "Xp-4dv", "IC4"]
@@ -554,11 +590,11 @@ def read_training_csv(path: str) -> pd.DataFrame:
 
 
 @st.cache_resource
-def load_scaler_and_model(train_csv_path: str, model_path: str):
+def load_scaler_model_and_ad(train_csv_path: str, model_path: str):
     # ---- Load training data (robust) ----
     data = read_training_csv(train_csv_path)
 
-    # ---- Validate required column ----
+    # ---- Validate required split column ----
     if "prediction_training" not in data.columns:
         raise KeyError(
             "Column 'prediction_training' not found in training CSV. "
@@ -567,10 +603,7 @@ def load_scaler_and_model(train_csv_path: str, model_path: str):
 
     # ---- Clean split column ----
     data["prediction_training"] = (
-        data["prediction_training"]
-        .astype(str)
-        .str.strip()
-        .str.lower()
+        data["prediction_training"].astype(str).str.strip().str.lower()
     )
 
     train_data = data[data["prediction_training"] == "training"]
@@ -580,9 +613,7 @@ def load_scaler_and_model(train_csv_path: str, model_path: str):
     # ---- Validate model feature columns ----
     missing_feats = [f for f in MODEL_FEATURES if f not in data.columns]
     if missing_feats:
-        raise KeyError(
-            "MODEL_FEATURES missing in training CSV: " + ", ".join(missing_feats)
-        )
+        raise KeyError("MODEL_FEATURES missing in training CSV: " + ", ".join(missing_feats))
 
     X_train = train_data[MODEL_FEATURES].apply(pd.to_numeric, errors="coerce")
     if X_train.isna().any().any():
@@ -591,7 +622,15 @@ def load_scaler_and_model(train_csv_path: str, model_path: str):
 
     # ---- Fit scaler ONLY on training data ----
     scaler = StandardScaler()
-    scaler.fit(X_train.values)
+    X_train_scaled = scaler.fit_transform(X_train.values)
+
+    # ---- Build leverage (Williams-style) in feature space ----
+    # X_design = [1, X_scaled]
+    n = X_train_scaled.shape[0]
+    p = X_train_scaled.shape[1]
+    X_design = np.column_stack([np.ones(n), X_train_scaled])
+    xtx_inv = np.linalg.pinv(X_design.T @ X_design)
+    h_star = 3.0 * (p + 1) / n
 
     # ---- Load trained model (PKL) ----
     if not os.path.exists(model_path):
@@ -600,7 +639,7 @@ def load_scaler_and_model(train_csv_path: str, model_path: str):
     with open(model_path, "rb") as f:
         model = pickle.load(f)
 
-    return scaler, model
+    return scaler, model, xtx_inv, float(h_star)
 
 
 def prepare_X_for_model(X_mix: np.ndarray, all_feature_cols: list) -> np.ndarray:
@@ -620,10 +659,31 @@ def prepare_X_for_model(X_mix: np.ndarray, all_feature_cols: list) -> np.ndarray
     return X_model
 
 
-# ---- Load scaler + model once ----
+def compute_leverage(x_scaled_row: np.ndarray, xtx_inv: np.ndarray) -> float:
+    """
+    Leverage for a single row using X_design = [1, X_scaled].
+    """
+    x = np.concatenate([[1.0], x_scaled_row.ravel()]).reshape(-1, 1)  # (p+1, 1)
+    h = float((x.T @ xtx_inv @ x).ravel()[0])
+    return h
+
+
+def style_confidence(df: pd.DataFrame):
+    def _color_conf(v):
+        v = str(v).strip().upper()
+        if v == "HIGH":
+            return "background-color: #0b7a0b; color: white; font-weight: bold;"
+        if v == "LOW":
+            return "background-color: #b00020; color: white; font-weight: bold;"
+        return ""
+
+    return df.style.applymap(_color_conf, subset=["Confidence"])
+
+
+# ---- Load scaler + model + AD once ----
 try:
-    scaler, model = load_scaler_and_model(TRAIN_CSV_PATH, MODEL_PATH)
-    st.success("✅ Scaler and model loaded successfully")
+    scaler, model, xtx_inv, h_star = load_scaler_model_and_ad(TRAIN_CSV_PATH, MODEL_PATH)
+    st.success("✅ Scaler, model, and AD settings loaded successfully")
 except Exception as e:
     st.error(f"Failed to load scaler/model: {e}")
     try:
@@ -633,7 +693,6 @@ except Exception as e:
     except Exception as e2:
         st.write(f"DEBUG — Could not read training CSV: {e2}")
     st.stop()
-
 
 # ------------------------------------------------------------
 # Collect available systems
@@ -649,14 +708,13 @@ if "X_mix2" in globals() and X_mix2 is not None:
 if "X_mix3" in globals() and X_mix3 is not None:
     mix_map["PEG + PMHS"] = X_mix3
 
-
 if not mix_map:
     st.warning("No mix descriptors available. Please run at least one system.")
 else:
     st.write("Model input features:", MODEL_FEATURES)
 
     if st.button("Predict fouling release"):
-        results = []
+        rows = []
 
         for system_name, X_mix in mix_map.items():
             try:
@@ -669,25 +727,32 @@ else:
                 # 3) predict
                 y_hat = model.predict(X_scaled)
 
-                results.append({
-                    "System": system_name,
-                    "Prediction": float(y_hat[0])
+                # 4) AD (Inside/Outside) using leverage
+                h = compute_leverage(X_scaled[0, :], xtx_inv)
+                inside_ad = (h <= h_star)
+
+                rows.append({
+                    "Std_residual": "Inside AD" if inside_ad else "Outside AD",
+                    "Confidence": "HIGH" if inside_ad else "LOW",
+                    f"{system_name} prediction": float(y_hat[0]),
                 })
 
             except Exception as e:
-                results.append({
-                    "System": system_name,
-                    "Prediction": np.nan,
-                    "Error": str(e)
+                rows.append({
+                    "Std_residual": "Outside AD",
+                    "Confidence": "LOW",
+                    f"{system_name} prediction": np.nan,
+                    "Error": str(e),
                 })
 
-        df_results = pd.DataFrame(results)
-        st.subheader("Prediction results")
-        st.dataframe(df_results)
+        df_out = pd.DataFrame(rows)
+
+        st.subheader("Prediction results (per system)")
+        st.dataframe(style_confidence(df_out), use_container_width=True)
 
         st.download_button(
             "Download predictions",
-            data=df_results.to_csv(index=False).encode("utf-8"),
+            data=df_out.to_csv(index=False).encode("utf-8"),
             file_name="fouling_release_predictions.csv",
-            mime="text/csv"
+            mime="text/csv",
         )
