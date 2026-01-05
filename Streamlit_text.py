@@ -511,6 +511,101 @@ else:
         st.stop()
 
 
+# ============================================================
+# PART 3 — CONNECT MODEL TO THE APPLICATION
+# ============================================================
+st.markdown("---")
+st.header("3) Connect model to the application")
+
+from sklearn.ensemble import GradientBoostingRegressor
+
+# ------------------------------------------------------------
+# Load training data
+# ------------------------------------------------------------
+TRAIN_CSV_PATH = "1_data/5_N_incerta_10_psi_training.csv"
+TARGET_COL = "perc_removal_10psi"
+
+MODEL_FEATURES = ["ATSC2se", "ATSC5i", "Xp-4dv", "IC4"]
+
+@st.cache_data
+def load_training_data(path):
+    df = pd.read_csv(path)
+    return df
+
+try:
+    df_train = load_training_data(TRAIN_CSV_PATH)
+except Exception as e:
+    st.error(f"Could not load training data: {e}")
+    st.stop()
+
+# ------------------------------------------------------------
+# Train Gradient Boosting model (same structure you used)
+# ------------------------------------------------------------
+X_train = df_train[MODEL_FEATURES].values
+y_train = df_train[TARGET_COL].values
+
+gbr_model = GradientBoostingRegressor(
+    n_estimators=300,
+    learning_rate=0.05,
+    max_depth=3,
+    min_samples_split=2,
+    min_samples_leaf=1,
+    random_state=42
+)
+
+gbr_model.fit(X_train, y_train)
+
+st.success("✅ Gradient Boosting model loaded and ready")
+
+# ------------------------------------------------------------
+# Collect mix descriptors from active systems
+# ------------------------------------------------------------
+PREDICTIONS = []
+
+def predict_system(system_name, X_mix):
+    X_model = X_mix[:, [feature_cols.index(f) for f in MODEL_FEATURES]]
+    y_pred = gbr_model.predict(X_model)[0]
+    return y_pred
+
+# -------- System 1 prediction --------
+if req_s1 is not None:
+    y1 = predict_system("SBMA + PDMS", X_mix1)
+    PREDICTIONS.append({
+        "System": "SBMA + PDMS",
+        "Predicted % removal (10 psi)": y1
+    })
+
+# -------- System 2 prediction --------
+if req_s2 is not None:
+    y2 = predict_system("PDMS + PEG", X_mix2)
+    PREDICTIONS.append({
+        "System": "PDMS + PEG",
+        "Predicted % removal (10 psi)": y2
+    })
+
+# -------- System 3 prediction --------
+if req_s3 is not None:
+    y3 = predict_system("PEG + PMHS", X_mix3)
+    PREDICTIONS.append({
+        "System": "PEG + PMHS",
+        "Predicted % removal (10 psi)": y3
+    })
+
+# ------------------------------------------------------------
+# Show predictions
+# ------------------------------------------------------------
+st.markdown("---")
+st.header("🔮 Model Predictions — N. incerta (10 psi)")
+
+if len(PREDICTIONS) == 0:
+    st.info("No system selected for prediction.")
+else:
+    df_pred = pd.DataFrame(PREDICTIONS)
+    st.dataframe(df_pred.style.format({"Predicted % removal (10 psi)": "{:.2f}"}))
+
+
+
+
 
 
 
