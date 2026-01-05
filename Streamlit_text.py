@@ -478,43 +478,46 @@ st.markdown("---")
 st.header("3) Connect model to the application")
 
 from sklearn.ensemble import GradientBoostingRegressor
+import pandas as pd
 
 # ------------------------------------------------------------
-# Load training data
+# Paths and model settings
 # ------------------------------------------------------------
 TRAIN_CSV_PATH = "1_data/5_N_incerta_10_psi_training.csv"
 
-# ✅ FIX: this is the real target name in your CSV
+# Exact target name as it appears in the CSV
 TARGET_COL = "% remotion _10psi"
 
+# Exact model inputs (features)
 MODEL_FEATURES = ["ATSC2se", "ATSC5i", "Xp-4dv", "IC4"]
 
 @st.cache_data
 def load_training_data(path):
     df = pd.read_csv(path)
-    # clean column names (keeps the exact target too)
     df.columns = df.columns.astype(str).str.strip()
     return df
 
+# ------------------------------------------------------------
+# Load training data
+# ------------------------------------------------------------
 try:
     df_train = load_training_data(TRAIN_CSV_PATH)
 except Exception as e:
     st.error(f"Could not load training data: {e}")
     st.stop()
 
-# ✅ Safety check: verify columns exist
-missing = [c for c in (MODEL_FEATURES + [TARGET_COL]) if c not in df_train.columns]
-if missing:
-    st.error(f"Training CSV is missing these columns: {missing}")
-    st.write("Columns found in training CSV:")
-    st.write(list(df_train.columns))
+# Safety checks
+missing_cols = [c for c in MODEL_FEATURES + [TARGET_COL] if c not in df_train.columns]
+if missing_cols:
+    st.error(f"Missing columns in training CSV: {missing_cols}")
+    st.write("Available columns:", list(df_train.columns))
     st.stop()
 
 # ------------------------------------------------------------
-# Train Gradient Boosting model (same structure you used)
+# Train Gradient Boosting model
 # ------------------------------------------------------------
-X_train = df_train[MODEL_FEATURES].astype(float)
-y_train = df_train[TARGET_COL].astype(float)
+X_train = df_train[MODEL_FEATURES].astype(float).values
+y_train = df_train[TARGET_COL].astype(float).values
 
 gbr_model = GradientBoostingRegressor(
     n_estimators=300,
@@ -526,79 +529,70 @@ gbr_model = GradientBoostingRegressor(
 )
 
 gbr_model.fit(X_train, y_train)
-
 st.success("✅ Gradient Boosting model trained and ready")
 
 # ------------------------------------------------------------
-# Collect mix descriptors from active systems
+# Prediction helpers
+# ------------------------------------------------------------
+def ensure_dataframe(X_mix, columns):
+    """Ensure X_mix is a DataFrame with the given columns."""
+    if isinstance(X_mix, pd.DataFrame):
+        return X_mix
+    return pd.DataFrame(X_mix, columns=columns)
+
+def predict_system(system_label, X_mix):
+    X_df = ensure_dataframe(X_mix, feature_cols)
+    missing_feats = [f for f in MODEL_FEATURES if f not in X_df.columns]
+    if missing_feats:
+        raise ValueError(f"{system_label}: missing features in X_mix: {missing_feats}")
+    y_pred = gbr_model.predict(X_df[MODEL_FEATURES].astype(float).values)[0]
+    return float(y_pred)
+
+# ------------------------------------------------------------
+# Collect predictions (one or multiple systems)
 # ------------------------------------------------------------
 PREDICTIONS = []
 
-def ensure_df(X_mix, name="X_mix"):
-    """
-    Ensure X_mix is a DataFrame with correct columns.
-    If it's numpy, convert using feature_cols (global from pure_descriptors.csv).
-    """
-    if isinstance(X_mix, pd.DataFrame):
-        return X_mix
-
-    # assume numpy array
+# System 1
+if req_s1 is not None:
     try:
-        return pd.DataFrame(X_mix, columns=feature_cols)
-    except Exception as e:
-        raise ValueError(f"{name} must be a DataFrame or a numpy array compatible with feature_cols. Error: {e}")
-
-def predict_system(system_name, X_mix, model):
-    X_df = ensure_df(X_mix, name=system_name)
-
-    # ✅ Select model features by column names (safe)
-    missing_feats = [f for f in MODEL_FEATURES if f not in X_df.columns]
-    if missing_feats:
-        raise ValueError(f"{system_name}: missing model features in X_mix: {missing_feats}")
-
-    y_pred = model.predict(X_df[MODEL_FEATURES].astype(float))[0]
-    return float(y_pred)
-
-# -------- System 1 prediction --------
-try:
-    if req_s1 is not None:
-        y1 = predict_system("SBMA + PDMS", X_mix1, gbr_model)
+        y1 = predict_system("SBMA + PDMS", X_mix1)
         PREDICTIONS.append({
             "System": "SBMA + PDMS",
             "Predicted % removal (10 psi)": y1
         })
-except Exception as e:
-    st.error(f"System 1 prediction failed: {e}")
+    except Exception as e:
+        st.error(f"System 1 prediction failed: {e}")
 
-# -------- System 2 prediction --------
-try:
-    if req_s2 is not None:
-        y2 = predict_system("PDMS + PEG", X_mix2, gbr_model)
+# System 2
+if req_s2 is not None:
+    try:
+        y2 = predict_system("PDMS + PEG", X_mix2)
         PREDICTIONS.append({
             "System": "PDMS + PEG",
             "Predicted % removal (10 psi)": y2
         })
-except Exception as e:
-    st.error(f"System 2 prediction failed: {e}")
+    except Exception as e:
+        st.error(f"System 2 prediction failed: {e}")
 
-# -------- System 3 prediction --------
-try:
-    if req_s3 is not None:
-        y3 = predict_system("PEG + PMHS", X_mix3, gbr_model)
+# System 3
+if req_s3 is not None:
+    try:
+        y3 = predict_system("PEG + PMHS", X_mix3)
         PREDICTIONS.append({
             "System": "PEG + PMHS",
             "Predicted % removal (10 psi)": y3
         })
-except Exception as e:
-    st.error(f"System 3 prediction failed: {e}")
+    except Exception as e:
+        st.error(f"System 3 prediction failed: {e}")
 
 # ------------------------------------------------------------
-# Show predictions
+# Display results
 # ------------------------------------------------------------
 st.markdown("---")
 st.header("🔮 Model Predictions — N. incerta (10 psi)")
 
-if len(PREDICTIONS) == 0:
+if not PREDICTIONS:
     st.info("No system selected for prediction.")
 else:
     df_pred = pd.DataFrame(PREDICTIONS)
