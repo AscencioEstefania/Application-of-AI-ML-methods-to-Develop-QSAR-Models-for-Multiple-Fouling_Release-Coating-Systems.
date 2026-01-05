@@ -278,7 +278,7 @@ def system_expander(label: str):
             )
         elif sys_code == "PDMS_PEG":
             A_add = st.number_input(
-                "PDMS + PEG additive percentage to add to the coating",
+                "The PDMS + PEG additive percentage to be added to the coating ranges from 0.1 to 0.4",
                 min_value=SYSTEM2_A_RANGE[0],
                 max_value=SYSTEM2_A_RANGE[1],
                 value=SYSTEM2_A_RANGE[0],
@@ -794,3 +794,4 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
