@@ -468,47 +468,7 @@ else:
         st.error(f"Failed to build System 2 mix descriptors: {e}")
         st.stop()
 
-# -----------------------------
-# System 3 — PEG + PMHS (SPECIAL)
-# -----------------------------
-st.subheader("System 3 — PEG + PMHS (total wt% only)")
 
-req_s3 = next((r for r in user_requests if r["system"] == "PEG_PMHS"), None)
-
-if req_s3 is None:
-    st.info("Select 'PEG + PMHS' above to run the System 3 test.")
-else:
-    try:
-        # MW ranges
-        validate_range("PEG",  req_s3["mw_a"], SYSTEM3_PEG_MW_RANGE[0],  SYSTEM3_PEG_MW_RANGE[1])
-        validate_range("PMHS", req_s3["mw_b"], SYSTEM3_PMHS_MW_RANGE[0], SYSTEM3_PMHS_MW_RANGE[1])
-
-        # total wt% rule
-        validate_total_wt("Total wt% (PEG+PMHS)", req_s3["wt_total"], SYSTEM3_WTOTAL_RANGE[0], SYSTEM3_WTOTAL_RANGE[1])
-
-        row_peg  = get_pure_row(df_pure, "PEG")
-        row_pmhs = get_pure_row(df_pure, "PMHS")
-
-        X_mix3, (n_peg, n_pmhs) = build_mix_system3(
-            row_peg=row_peg,
-            row_pmhs=row_pmhs,
-            feature_cols=feature_cols,
-            mw_peg=req_s3["mw_a"],
-            mw_pmhs=req_s3["mw_b"],
-            wt_total=req_s3["wt_total"],
-        )
-
-        st.success("✅ System 3 mix descriptors built successfully!")
-        st.write(f"n_PEG = MW_user/MW_monomer = {n_peg:.6f} | n_PMHS = {n_pmhs:.6f}")
-        st.write(f"Total wt% (PEG+PMHS) = {req_s3['wt_total']}")
-        st.write(f"X_mix3 shape: {X_mix3.shape}")
-
-        preview_n = min(12, len(feature_cols))
-        st.dataframe(pd.DataFrame(X_mix3[:, :preview_n], columns=feature_cols[:preview_n]))
-
-    except Exception as e:
-        st.error(f"Failed to build System 3 mix descriptors: {e}")
-        st.stop()
 
 
 # ============================================================
@@ -523,13 +483,17 @@ from sklearn.ensemble import GradientBoostingRegressor
 # Load training data
 # ------------------------------------------------------------
 TRAIN_CSV_PATH = "1_data/5_N_incerta_10_psi_training.csv"
-TARGET_COL = "perc_removal_10psi"
+
+# ✅ FIX: this is the real target name in your CSV
+TARGET_COL = "% remotion _10psi"
 
 MODEL_FEATURES = ["ATSC2se", "ATSC5i", "Xp-4dv", "IC4"]
 
 @st.cache_data
 def load_training_data(path):
     df = pd.read_csv(path)
+    # clean column names (keeps the exact target too)
+    df.columns = df.columns.astype(str).str.strip()
     return df
 
 try:
@@ -538,11 +502,19 @@ except Exception as e:
     st.error(f"Could not load training data: {e}")
     st.stop()
 
+# ✅ Safety check: verify columns exist
+missing = [c for c in (MODEL_FEATURES + [TARGET_COL]) if c not in df_train.columns]
+if missing:
+    st.error(f"Training CSV is missing these columns: {missing}")
+    st.write("Columns found in training CSV:")
+    st.write(list(df_train.columns))
+    st.stop()
+
 # ------------------------------------------------------------
 # Train Gradient Boosting model (same structure you used)
 # ------------------------------------------------------------
-X_train = df_train[MODEL_FEATURES].values
-y_train = df_train[TARGET_COL].values
+X_train = df_train[MODEL_FEATURES].astype(float)
+y_train = df_train[TARGET_COL].astype(float)
 
 gbr_model = GradientBoostingRegressor(
     n_estimators=300,
@@ -555,41 +527,70 @@ gbr_model = GradientBoostingRegressor(
 
 gbr_model.fit(X_train, y_train)
 
-st.success("✅ Gradient Boosting model loaded and ready")
+st.success("✅ Gradient Boosting model trained and ready")
 
 # ------------------------------------------------------------
 # Collect mix descriptors from active systems
 # ------------------------------------------------------------
 PREDICTIONS = []
 
-def predict_system(system_name, X_mix):
-    X_model = X_mix[:, [feature_cols.index(f) for f in MODEL_FEATURES]]
-    y_pred = gbr_model.predict(X_model)[0]
-    return y_pred
+def ensure_df(X_mix, name="X_mix"):
+    """
+    Ensure X_mix is a DataFrame with correct columns.
+    If it's numpy, convert using feature_cols (global from pure_descriptors.csv).
+    """
+    if isinstance(X_mix, pd.DataFrame):
+        return X_mix
+
+    # assume numpy array
+    try:
+        return pd.DataFrame(X_mix, columns=feature_cols)
+    except Exception as e:
+        raise ValueError(f"{name} must be a DataFrame or a numpy array compatible with feature_cols. Error: {e}")
+
+def predict_system(system_name, X_mix, model):
+    X_df = ensure_df(X_mix, name=system_name)
+
+    # ✅ Select model features by column names (safe)
+    missing_feats = [f for f in MODEL_FEATURES if f not in X_df.columns]
+    if missing_feats:
+        raise ValueError(f"{system_name}: missing model features in X_mix: {missing_feats}")
+
+    y_pred = model.predict(X_df[MODEL_FEATURES].astype(float))[0]
+    return float(y_pred)
 
 # -------- System 1 prediction --------
-if req_s1 is not None:
-    y1 = predict_system("SBMA + PDMS", X_mix1)
-    PREDICTIONS.append({
-        "System": "SBMA + PDMS",
-        "Predicted % removal (10 psi)": y1
-    })
+try:
+    if req_s1 is not None:
+        y1 = predict_system("SBMA + PDMS", X_mix1, gbr_model)
+        PREDICTIONS.append({
+            "System": "SBMA + PDMS",
+            "Predicted % removal (10 psi)": y1
+        })
+except Exception as e:
+    st.error(f"System 1 prediction failed: {e}")
 
 # -------- System 2 prediction --------
-if req_s2 is not None:
-    y2 = predict_system("PDMS + PEG", X_mix2)
-    PREDICTIONS.append({
-        "System": "PDMS + PEG",
-        "Predicted % removal (10 psi)": y2
-    })
+try:
+    if req_s2 is not None:
+        y2 = predict_system("PDMS + PEG", X_mix2, gbr_model)
+        PREDICTIONS.append({
+            "System": "PDMS + PEG",
+            "Predicted % removal (10 psi)": y2
+        })
+except Exception as e:
+    st.error(f"System 2 prediction failed: {e}")
 
 # -------- System 3 prediction --------
-if req_s3 is not None:
-    y3 = predict_system("PEG + PMHS", X_mix3)
-    PREDICTIONS.append({
-        "System": "PEG + PMHS",
-        "Predicted % removal (10 psi)": y3
-    })
+try:
+    if req_s3 is not None:
+        y3 = predict_system("PEG + PMHS", X_mix3, gbr_model)
+        PREDICTIONS.append({
+            "System": "PEG + PMHS",
+            "Predicted % removal (10 psi)": y3
+        })
+except Exception as e:
+    st.error(f"System 3 prediction failed: {e}")
 
 # ------------------------------------------------------------
 # Show predictions
@@ -602,11 +603,3 @@ if len(PREDICTIONS) == 0:
 else:
     df_pred = pd.DataFrame(PREDICTIONS)
     st.dataframe(df_pred.style.format({"Predicted % removal (10 psi)": "{:.2f}"}))
-
-
-
-
-
-
-
-
