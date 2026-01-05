@@ -368,7 +368,7 @@ def system_expander(label: str):
 
             # p B (0-1)
             p_b = st.number_input(
-                st.text("The content % of the PDMS additive must be between 0 and 1."),,
+                st.text("The content % of the PDMS additive must be between 0 and 1."),
                 min_value=0.0,
                 max_value=1.0,
                 value=0.5,
@@ -762,6 +762,7 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
 
 
 
