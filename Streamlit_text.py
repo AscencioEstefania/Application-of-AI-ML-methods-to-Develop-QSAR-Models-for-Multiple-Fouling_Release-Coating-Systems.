@@ -532,7 +532,7 @@ import joblib
 # ------------------------------------------------------------
 # Paths
 # ------------------------------------------------------------
-TRAIN_CSV_PATH = "1_Data/5_N_incerta_10_psi_training.csv"
+TRAIN_CSV_PATH = "1_data/5_N_incerta_10_psi_training.csv"
 MODEL_PATH = "models/best_gbr_model.joblib"   # <- change to your real file
 
 # Model features (fixed)
@@ -640,4 +640,5 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv"
         )
+
 
