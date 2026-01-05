@@ -519,3 +519,125 @@ else:
 
 
 
+# ============================================================
+# PART 3 — CONNECT MODEL (WITH INTERNAL SCALING)
+# ============================================================
+st.markdown("---")
+st.header("3) Model prediction")
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import GradientBoostingRegressor
+import joblib
+
+# ------------------------------------------------------------
+# Paths
+# ------------------------------------------------------------
+TRAIN_CSV_PATH = "1_Data/5_N_incerta_10_psi_training.csv"
+MODEL_PATH = "models/best_gbr_model.joblib"   # <- change to your real file
+
+# Model features (fixed)
+MODEL_FEATURES = ["ATSC2se", "ATSC5i", "Xp-4dv", "IC4"]
+
+
+@st.cache_resource
+def load_scaler_and_model(train_csv_path, model_path):
+    # ---- Load training data (same as training script) ----
+    data = pd.read_csv(train_csv_path, encoding="UTF-8", delimiter=";")
+    data["prediction_training"] = data["prediction_training"].str.strip()
+
+    train_data = data[data["prediction_training"] == "training"]
+
+    X_train = train_data[MODEL_FEATURES]
+
+    # ---- Fit scaler ONLY on training data ----
+    scaler = StandardScaler()
+    scaler.fit(X_train)
+
+    # ---- Load trained model ----
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+
+    model = joblib.load(model_path)
+
+    return scaler, model
+
+
+def prepare_X_for_model(X_mix, feature_cols):
+    """
+    Extracts MODEL_FEATURES from X_mix in correct order.
+    """
+    idx = [feature_cols.index(f) for f in MODEL_FEATURES]
+    X_model = X_mix[:, idx].astype(float)
+
+    if np.isnan(X_model).any():
+        raise ValueError("NaN detected in model input features.")
+
+    return X_model
+
+
+# ---- Load scaler + model once ----
+try:
+    scaler, model = load_scaler_and_model(TRAIN_CSV_PATH, MODEL_PATH)
+    st.success("✅ Scaler and model loaded successfully")
+except Exception as e:
+    st.error(f"Failed to load scaler/model: {e}")
+    st.stop()
+
+
+# ------------------------------------------------------------
+# Collect available systems
+# ------------------------------------------------------------
+mix_map = {}
+
+if "X_mix1" in globals() and X_mix1 is not None:
+    mix_map["SBMA + PDMS"] = X_mix1
+
+if "X_mix2" in globals() and X_mix2 is not None:
+    mix_map["PDMS + PEG"] = X_mix2
+
+if "X_mix3" in globals() and X_mix3 is not None:
+    mix_map["PEG + PMHS"] = X_mix3
+
+
+if not mix_map:
+    st.warning("No mix descriptors available. Please run at least one system.")
+else:
+    st.write("Model input features:", MODEL_FEATURES)
+
+    if st.button("Predict fouling release"):
+        results = []
+
+        for system_name, X_mix in mix_map.items():
+            try:
+                # 1) select features
+                X_model = prepare_X_for_model(X_mix, feature_cols)
+
+                # 2) scale (same scaler as training)
+                X_scaled = scaler.transform(X_model)
+
+                # 3) predict
+                y_hat = model.predict(X_scaled)
+
+                results.append({
+                    "System": system_name,
+                    "Prediction": float(y_hat[0])
+                })
+
+            except Exception as e:
+                results.append({
+                    "System": system_name,
+                    "Prediction": np.nan,
+                    "Error": str(e)
+                })
+
+        df_results = pd.DataFrame(results)
+        st.subheader("Prediction results")
+        st.dataframe(df_results)
+
+        st.download_button(
+            "Download predictions",
+            data=df_results.to_csv(index=False).encode("utf-8"),
+            file_name="fouling_release_predictions.csv",
+            mime="text/csv"
+        )
+
