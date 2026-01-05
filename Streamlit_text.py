@@ -310,7 +310,7 @@ def system_expander(label: str):
             elif sys_code == "SBMA_PDMS":
                 # ONLY CHANGE: label + help (no range shown in the label)
                 mw_a = st.number_input(
-                    "SBMA molecular weight",
+                    "SBMA molecular weight must be between 500 to 2500",
                     min_value=SBMA_MW_RANGE[0],
                     max_value=SBMA_MW_RANGE[1],
                     value=SBMA_MW_RANGE[0],
@@ -349,7 +349,7 @@ def system_expander(label: str):
             elif sys_code == "SBMA_PDMS":
                 # ONLY CHANGE: label + help (no range shown in the label)
                 mw_b = st.number_input(
-                    "PDMS molecular weight",
+                    "PDMS molecular weight must be between 1000 to 5000",
                     min_value=PDMS_MW_RANGE[0],
                     max_value=PDMS_MW_RANGE[1],
                     value=PDMS_MW_RANGE[0],
@@ -762,3 +762,4 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
