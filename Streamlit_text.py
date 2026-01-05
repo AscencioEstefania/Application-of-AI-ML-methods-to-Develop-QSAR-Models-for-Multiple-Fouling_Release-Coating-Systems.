@@ -289,15 +289,16 @@ def system_expander(label: str):
                 key=f"{sys_code}_A_add",
             )
         else:
-            A_add = st.number_input(
-                f"[{label}] Additive Amount A",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.01,
-                step=0.01,
-                key=f"{sys_code}_A_add",
-            )
+    
 
+           A_add = st.number_input(
+             "SBMA + PDMS additive percentage to add to the coating",
+             value=0.01,
+             disabled=True,
+             format="%.3f",
+              key=f"{sys_code}_A_add",
+               )
+           
         with c1:
             # MW A
             if sys_code == "PDMS_PEG":
@@ -762,6 +763,7 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
 
 
 
