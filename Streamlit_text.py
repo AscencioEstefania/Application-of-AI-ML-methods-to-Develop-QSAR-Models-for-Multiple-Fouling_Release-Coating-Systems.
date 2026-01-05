@@ -267,7 +267,6 @@ def system_expander(label: str):
 
         # ---- Additive Amount A (depends on system) ----
         if sys_code == "SBMA_PDMS":
-            # ONLY CHANGE: label + help (no range shown in the label)
             A_add = st.number_input(
                 "SBMA + PDMS additive percentage to add to the coating",
                 min_value=SYSTEM1_A_RANGE[0],
@@ -276,11 +275,10 @@ def system_expander(label: str):
                 step=0.001,
                 format="%.3f",
                 key=f"{sys_code}_A_add",
-                help="Additive amount must be between 0.01 and 0.02",
             )
         elif sys_code == "PDMS_PEG":
             A_add = st.number_input(
-                f"[{label}] Additive Amount A  [{SYSTEM2_A_RANGE[0]}–{SYSTEM2_A_RANGE[1]}]",
+                "PDMS + PEG additive percentage to add to the coating",
                 min_value=SYSTEM2_A_RANGE[0],
                 max_value=SYSTEM2_A_RANGE[1],
                 value=SYSTEM2_A_RANGE[0],
@@ -289,27 +287,25 @@ def system_expander(label: str):
                 key=f"{sys_code}_A_add",
             )
         else:
-    
+            A_add = st.number_input(
+                f"[{label}] Additive Amount A",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.01,
+                step=0.01,
+                key=f"{sys_code}_A_add",
+            )
 
-           A_add = st.number_input(
-             "SBMA + PDMS additive percentage to add to the coating",
-             value=0.01,
-             disabled=True,
-             format="%.3f",
-              key=f"{sys_code}_A_add",
-               )
-           
         with c1:
             # MW A
             if sys_code == "PDMS_PEG":
                 mw_a = st.selectbox(
-                    f"[{label}] MW component A (PDMS fixed)  [{SYSTEM2_FIXED_MW['PDMS']}]",
+                    "PDMS molecular weight must be 750",
                     options=[SYSTEM2_FIXED_MW["PDMS"]],
                     key=f"{sys_code}_mw_a_select",
                 )
                 mw_a = float(mw_a)
             elif sys_code == "SBMA_PDMS":
-                # ONLY CHANGE: label + help (no range shown in the label)
                 mw_a = st.number_input(
                     "SBMA molecular weight must be between 500 to 2500",
                     min_value=SBMA_MW_RANGE[0],
@@ -317,7 +313,6 @@ def system_expander(label: str):
                     value=SBMA_MW_RANGE[0],
                     step=10.0,
                     key=f"{sys_code}_mw_a",
-                    help="SBMA molecular weight must be between 500 and 2500",
                 )
             else:
                 mw_a = st.number_input(
@@ -329,26 +324,44 @@ def system_expander(label: str):
                 )
 
             # p A (0-1)
-            p_a = st.number_input(
-                "The content % of the SBMA additive must be between 0 and 1.",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.5,
-                step=0.01,
-                key=f"{sys_code}_p_a",
-            )
+            if sys_code == "SBMA_PDMS":
+                p_a = st.number_input(
+                    "The content % of the SBMA additive must be between 0 and 1.",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.5,
+                    step=0.01,
+                    key=f"{sys_code}_p_a",
+                )
+            elif sys_code == "PDMS_PEG":
+                p_a = st.number_input(
+                    "The content % of the PDMS additive must be between 0 and 1.",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.5,
+                    step=0.01,
+                    key=f"{sys_code}_p_a",
+                )
+            else:
+                p_a = st.number_input(
+                    f"[{label}] p (0–1) component A  [0–1]",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.5,
+                    step=0.01,
+                    key=f"{sys_code}_p_a",
+                )
 
         with c2:
             # MW B
             if sys_code == "PDMS_PEG":
                 mw_b = st.selectbox(
-                    f"[{label}] MW component B (PEG fixed)  [{SYSTEM2_FIXED_MW['PEG']}]",
+                    "PEG molecular weight must be 1000",
                     options=[SYSTEM2_FIXED_MW["PEG"]],
                     key=f"{sys_code}_mw_b_select",
                 )
                 mw_b = float(mw_b)
             elif sys_code == "SBMA_PDMS":
-                # ONLY CHANGE: label + help (no range shown in the label)
                 mw_b = st.number_input(
                     "PDMS molecular weight must be between 1000 to 5000",
                     min_value=PDMS_MW_RANGE[0],
@@ -356,7 +369,6 @@ def system_expander(label: str):
                     value=PDMS_MW_RANGE[0],
                     step=10.0,
                     key=f"{sys_code}_mw_b",
-                    help="PDMS molecular weight must be between 1000 and 5000",
                 )
             else:
                 mw_b = st.number_input(
@@ -368,14 +380,33 @@ def system_expander(label: str):
                 )
 
             # p B (0-1)
-            p_b = st.number_input(
-                "The content % of the SBMA additive must be between 0 and 1.",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.5,
-                step=0.01,
-                key=f"{sys_code}_p_b",
-            )
+            if sys_code == "SBMA_PDMS":
+                p_b = st.number_input(
+                    "The content % of the SBMA additive must be between 0 and 1.",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.5,
+                    step=0.01,
+                    key=f"{sys_code}_p_b",
+                )
+            elif sys_code == "PDMS_PEG":
+                p_b = st.number_input(
+                    "The content % of the PEG additive must be between 0 and 1.",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.5,
+                    step=0.01,
+                    key=f"{sys_code}_p_b",
+                )
+            else:
+                p_b = st.number_input(
+                    f"[{label}] p (0–1) component B  [0–1]",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.5,
+                    step=0.01,
+                    key=f"{sys_code}_p_b",
+                )
 
         if (p_a + p_b) == 0:
             st.error("p values cannot both be zero.")
@@ -398,8 +429,8 @@ for label in systems_to_show:
     if out is not None:
         user_requests.append(out)
 
-#st.subheader("Current inputs (debug)")
-#st.dataframe(user_requests)
+st.subheader("Current inputs (debug)")
+st.dataframe(user_requests)
 
 # ============================================================
 # PART 2 — BUILD MIX DESCRIPTORS (System 1, 2, 3)
@@ -763,12 +794,3 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
-
-
-
-
-
-
-
-
-
