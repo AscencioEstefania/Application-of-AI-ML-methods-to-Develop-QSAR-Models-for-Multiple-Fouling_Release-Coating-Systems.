@@ -269,7 +269,7 @@ def system_expander(label: str):
         if sys_code == "SBMA_PDMS":
             # ONLY CHANGE: label + help (no range shown in the label)
             A_add = st.number_input(
-                "Additive amount",
+                "SBMA + PDMS additive percentage to add to the coating",
                 min_value=SYSTEM1_A_RANGE[0],
                 max_value=SYSTEM1_A_RANGE[1],
                 value=SYSTEM1_A_RANGE[0],
@@ -762,6 +762,7 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
 
 
 
