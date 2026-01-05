@@ -619,11 +619,11 @@ except Exception as e:
 
 mix_map = {}
 if X_mix1 is not None:
-    mix_map["SBMA + PDMS prediction"] = X_mix1
+    mix_map["System 1 (% removal 10 psi)"] = X_mix1
 if X_mix2 is not None:
-    mix_map["PDMS + PEG prediction"] = X_mix2
+    mix_map["System 2 (% removal 10 psi)"] = X_mix2
 if X_mix3 is not None:
-    mix_map["PEG + PMHS prediction"] = X_mix3
+    mix_map["System 3 (% removal 10 psi)"] = X_mix3
 
 if not mix_map:
     st.warning("No mix descriptors available. Please run at least one system.")
@@ -663,6 +663,7 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
 
 
 
