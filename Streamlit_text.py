@@ -267,14 +267,16 @@ def system_expander(label: str):
 
         # ---- Additive Amount A (depends on system) ----
         if sys_code == "SBMA_PDMS":
+            # ONLY CHANGE: label + help (no range shown in the label)
             A_add = st.number_input(
-                f"[{label}] Additive Amount A  [{SYSTEM1_A_RANGE[0]}–{SYSTEM1_A_RANGE[1]}]",
+                "Additive amount",
                 min_value=SYSTEM1_A_RANGE[0],
                 max_value=SYSTEM1_A_RANGE[1],
                 value=SYSTEM1_A_RANGE[0],
                 step=0.001,
                 format="%.3f",
                 key=f"{sys_code}_A_add",
+                help="Additive amount must be between 0.01 and 0.02",
             )
         elif sys_code == "PDMS_PEG":
             A_add = st.number_input(
@@ -306,13 +308,15 @@ def system_expander(label: str):
                 )
                 mw_a = float(mw_a)
             elif sys_code == "SBMA_PDMS":
+                # ONLY CHANGE: label + help (no range shown in the label)
                 mw_a = st.number_input(
-                    f"[{label}] MW component A (SBMA)  [{SBMA_MW_RANGE[0]}–{SBMA_MW_RANGE[1]}]",
+                    "SBMA molecular weight",
                     min_value=SBMA_MW_RANGE[0],
                     max_value=SBMA_MW_RANGE[1],
                     value=SBMA_MW_RANGE[0],
                     step=10.0,
                     key=f"{sys_code}_mw_a",
+                    help="SBMA molecular weight must be between 500 and 2500",
                 )
             else:
                 mw_a = st.number_input(
@@ -343,13 +347,15 @@ def system_expander(label: str):
                 )
                 mw_b = float(mw_b)
             elif sys_code == "SBMA_PDMS":
+                # ONLY CHANGE: label + help (no range shown in the label)
                 mw_b = st.number_input(
-                    f"[{label}] MW component B (PDMS)  [{PDMS_MW_RANGE[0]}–{PDMS_MW_RANGE[1]}]",
+                    "PDMS molecular weight",
                     min_value=PDMS_MW_RANGE[0],
                     max_value=PDMS_MW_RANGE[1],
                     value=PDMS_MW_RANGE[0],
                     step=10.0,
                     key=f"{sys_code}_mw_b",
+                    help="PDMS molecular weight must be between 1000 and 5000",
                 )
             else:
                 mw_b = st.number_input(
