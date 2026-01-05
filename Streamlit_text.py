@@ -22,6 +22,7 @@ st.title("Fouling Release Predictor")
 PURE_CSV_PATH = "Pure_descriptors.csv"
 COMP_COL = "Comp"  # your real column name in the CSV
 
+
 @st.cache_data
 def load_pure_descriptors(path: str = PURE_CSV_PATH) -> pd.DataFrame:
     """
@@ -132,24 +133,16 @@ SYSTEM3_WTOTAL_RANGE  = (0.01, 0.10)
 
 # ============================================================
 # MIX builders
-# System 1 & 2 (as you had):
-#   n = MW_user / MW_monomer
-#   mix = A * (D_A*n_A*p_A + D_B*n_B*p_B)
-#
-# System 3 (your rule):
-#   n = MW_user / MW_monomer
-#   mix = wt_total * (D_PEG*n_PEG + D_PMHS*n_PMHS)
-#   (NO p split, NO 50/50 assumption)
 # ============================================================
 def build_mix_system1(
     row_sbma: pd.Series,
     row_pdms: pd.Series,
     feature_cols: list,
     mw_sbma: float,
-    p_sbma: float,          # already 0–1
+    p_sbma: float,
     mw_pdms: float,
-    p_pdms: float,          # already 0–1
-    additive_amount: float  # A in [0.01, 0.02]
+    p_pdms: float,
+    additive_amount: float
 ):
     n_sbma = float(mw_sbma) / float(MONOMER_MW["SBMA"])
     n_pdms = float(mw_pdms) / float(MONOMER_MW["PDMS"])
@@ -166,10 +159,10 @@ def build_mix_system2(
     row_peg: pd.Series,
     feature_cols: list,
     mw_pdms: float,
-    p_pdms: float,          # already 0–1
+    p_pdms: float,
     mw_peg: float,
-    p_peg: float,           # already 0–1
-    additive_amount: float  # A in [0.10, 0.40]
+    p_peg: float,
+    additive_amount: float
 ):
     n_pdms = float(mw_pdms) / float(MONOMER_MW["PDMS"])
     n_peg  = float(mw_peg)  / float(MONOMER_MW["PEG"])
@@ -187,7 +180,7 @@ def build_mix_system3(
     feature_cols: list,
     mw_peg: float,
     mw_pmhs: float,
-    wt_total: float  # total (PEG + PMHS) in [0.01, 0.10]
+    wt_total: float
 ):
     n_peg  = float(mw_peg)  / float(MONOMER_MW["PEG"])
     n_pmhs = float(mw_pmhs) / float(MONOMER_MW["PMHS"])
@@ -223,6 +216,7 @@ else:
 def system_expander(label: str):
     sys_code = SYSTEMS[label]
     with st.expander(f"System: {label}", expanded=(mode == "Only one system")):
+
         # ---- System 3 special UI (NO p split) ----
         if sys_code == "PEG_PMHS":
             c1, c2 = st.columns(2)
@@ -376,6 +370,11 @@ except Exception as e:
 drop_cols = {COMP_COL, "No.", "No", "ID"}
 feature_cols = [c for c in df_pure.columns if c not in drop_cols]
 
+# Initialize mix outputs (important)
+X_mix1 = None
+X_mix2 = None
+X_mix3 = None
+
 # -----------------------------
 # System 1 — SBMA + PDMS
 # -----------------------------
@@ -393,7 +392,9 @@ else:
         validate_p("PDMS", req_s1["p_b"])
 
         if not (SYSTEM1_A_RANGE[0] <= req_s1["A_add"] <= SYSTEM1_A_RANGE[1]):
-            raise ValueError(f"System 1 Additive Amount A must be between {SYSTEM1_A_RANGE[0]} and {SYSTEM1_A_RANGE[1]}.")
+            raise ValueError(
+                f"System 1 Additive Amount A must be between {SYSTEM1_A_RANGE[0]} and {SYSTEM1_A_RANGE[1]}."
+            )
 
         row_sbma = get_pure_row(df_pure, "SBMA")
         row_pdms = get_pure_row(df_pure, "PDMS")
@@ -410,7 +411,7 @@ else:
         )
 
         st.success("✅ System 1 mix descriptors built successfully!")
-        st.write(f"n_SBMA = MW_user/MW_monomer = {n_sbma:.6f} | n_PDMS = {n_pdms:.6f}")
+        st.write(f"n_SBMA = {n_sbma:.6f} | n_PDMS = {n_pdms:.6f}")
         st.write(f"Additive Amount A = {req_s1['A_add']}")
         st.write(f"X_mix1 shape: {X_mix1.shape}")
 
@@ -435,12 +436,13 @@ else:
         validate_p("PDMS", req_s2["p_a"])
         validate_p("PEG",  req_s2["p_b"])
 
-        # Fixed MW rules (your system 2)
         validate_fixed_mw("PDMS", req_s2["mw_a"], SYSTEM2_FIXED_MW["PDMS"])
         validate_fixed_mw("PEG",  req_s2["mw_b"], SYSTEM2_FIXED_MW["PEG"])
 
         if not (SYSTEM2_A_RANGE[0] <= req_s2["A_add"] <= SYSTEM2_A_RANGE[1]):
-            raise ValueError(f"System 2 Additive Amount A must be between {SYSTEM2_A_RANGE[0]} and {SYSTEM2_A_RANGE[1]}.")
+            raise ValueError(
+                f"System 2 Additive Amount A must be between {SYSTEM2_A_RANGE[0]} and {SYSTEM2_A_RANGE[1]}."
+            )
 
         row_pdms = get_pure_row(df_pure, "PDMS")
         row_peg  = get_pure_row(df_pure, "PEG")
@@ -467,6 +469,52 @@ else:
     except Exception as e:
         st.error(f"Failed to build System 2 mix descriptors: {e}")
         st.stop()
+
+# -----------------------------
+# System 3 — PEG + PMHS  (THIS IS WHAT WAS MISSING)
+# -----------------------------
+st.subheader("System 3 — PEG + PMHS")
+
+req_s3 = next((r for r in user_requests if r["system"] == "PEG_PMHS"), None)
+
+if req_s3 is None:
+    st.info("Select 'PEG + PMHS' above to run the System 3 test.")
+else:
+    try:
+        validate_total_wt(
+            "System 3 total wt% (PEG + PMHS)",
+            req_s3["wt_total"],
+            SYSTEM3_WTOTAL_RANGE[0],
+            SYSTEM3_WTOTAL_RANGE[1]
+        )
+
+        validate_range("PEG",  req_s3["mw_a"], SYSTEM3_PEG_MW_RANGE[0],  SYSTEM3_PEG_MW_RANGE[1])
+        validate_range("PMHS", req_s3["mw_b"], SYSTEM3_PMHS_MW_RANGE[0], SYSTEM3_PMHS_MW_RANGE[1])
+
+        row_peg  = get_pure_row(df_pure, "PEG")
+        row_pmhs = get_pure_row(df_pure, "PMHS")
+
+        X_mix3, (n_peg, n_pmhs) = build_mix_system3(
+            row_peg=row_peg,
+            row_pmhs=row_pmhs,
+            feature_cols=feature_cols,
+            mw_peg=req_s3["mw_a"],
+            mw_pmhs=req_s3["mw_b"],
+            wt_total=req_s3["wt_total"]
+        )
+
+        st.success("✅ System 3 mix descriptors built successfully!")
+        st.write(f"n_PEG = {n_peg:.6f} | n_PMHS = {n_pmhs:.6f}")
+        st.write(f"Total wt% (PEG + PMHS) = {req_s3['wt_total']}")
+        st.write(f"X_mix3 shape: {X_mix3.shape}")
+
+        preview_n = min(12, len(feature_cols))
+        st.dataframe(pd.DataFrame(X_mix3[:, :preview_n], columns=feature_cols[:preview_n]))
+
+    except Exception as e:
+        st.error(f"Failed to build System 3 mix descriptors: {e}")
+        st.stop()
+
 
 
 
