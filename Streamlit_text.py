@@ -359,8 +359,8 @@ for label in systems_to_show:
     if out is not None:
         user_requests.append(out)
 
-st.subheader("Current inputs (debug)")
-st.dataframe(user_requests)
+#st.subheader("Current inputs (debug)")
+#st.dataframe(user_requests)
 
 # ============================================================
 # PART 2 — BUILD MIX DESCRIPTORS (System 1, 2, 3)
@@ -523,6 +523,7 @@ else:
     except Exception as e:
         st.error(f"Failed to build System 3 mix descriptors: {e}")
         st.stop()
+
 
 
 
