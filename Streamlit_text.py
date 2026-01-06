@@ -518,7 +518,7 @@ if req_s3 is not None:
 # PART 3 — CONNECT MODEL (WITH INTERNAL SCALING + AD + CONFIDENCE)
 # ============================================================
 st.markdown("---")
-st.header("3) Model prediction")
+st.header("2) Model prediction")
 
 from sklearn.preprocessing import StandardScaler
 import pickle
@@ -664,6 +664,7 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
 
 
 
