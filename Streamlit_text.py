@@ -252,7 +252,7 @@ def system_expander(label: str):
                 key=f"{sys_code}_wt_total",
             )
 
-            st.caption("System 3 uses ONLY total wt% (PEG+PMHS). No individual p values, no 50/50 assumption.")
+             #st.caption("System 3 uses ONLY total wt% (PEG+PMHS). No individual p values, no 50/50 assumption.")
             return {"system": sys_code, "mw_a": mw_a, "mw_b": mw_b, "wt_total": wt_total}
 
         # ---- Systems 1 & 2 UI (kept as-is) ----
@@ -664,6 +664,7 @@ else:
             file_name="fouling_release_predictions.csv",
             mime="text/csv",
         )
+
 
 
 
