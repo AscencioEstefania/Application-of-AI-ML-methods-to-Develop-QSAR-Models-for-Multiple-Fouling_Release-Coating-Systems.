@@ -525,7 +525,7 @@ import pickle
 
 TRAIN_CSV_PATH = "1_data/5_N_incerta_10_psi_training.csv"
 MODEL_PATH = "best_gbr_model.pkl"
-MODEL_FEATURES = ["ATSC2se", "ATSC5i", "Xp-4dv", "IC4"]
+MODEL_FEATURES = ["C-006", "ATSC2c", "IC3"]
 
 
 def read_training_csv(path: str) -> pd.DataFrame:
