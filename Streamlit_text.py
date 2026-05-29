@@ -425,7 +425,13 @@ else:
             try:
                 X_model = prepare_X_for_model(X_mix, feature_cols)
                 X_scaled = scaler.transform(X_model)
-                y_hat = model.predict(X_scaled)
+                expected = model.n_features_in_
+
+if X_scaled.shape[1] < expected:
+    missing = expected - X_scaled.shape[1]
+    X_scaled = np.hstack([X_scaled, np.zeros((X_scaled.shape[0], missing))])
+
+y_hat = model.predict(X_scaled)
 
                 h = compute_leverage(X_scaled[0, :], xtx_inv)
                 inside_ad = h <= h_star
