@@ -424,19 +424,24 @@ else:
         for col_name, X_mix in mix_map.items():
             try:
                 X_model = prepare_X_for_model(X_mix, feature_cols)
-                X_scaled = scaler.transform(X_model)
+
+                X_scaled_ad = scaler.transform(X_model)
+                X_scaled_model = X_scaled_ad.copy()
+
                 expected = model.n_features_in_
 
-                if X_scaled.shape[1] < expected:
-                    missing = expected - X_scaled.shape[1]
-                    X_scaled = np.hstack([X_scaled, np.zeros((X_scaled.shape[0], missing))])
+                if X_scaled_model.shape[1] < expected:
+                    missing = expected - X_scaled_model.shape[1]
+                    X_scaled_model = np.hstack(
+                        [X_scaled_model, np.zeros((X_scaled_model.shape[0], missing))]
+                    )
 
-                elif X_scaled.shape[1] > expected:
-                    X_scaled = X_scaled[:, :expected]
+                elif X_scaled_model.shape[1] > expected:
+                    X_scaled_model = X_scaled_model[:, :expected]
 
-                y_hat = model.predict(X_scaled)
+                y_hat = model.predict(X_scaled_model)
 
-                h = compute_leverage(X_scaled[0, :], xtx_inv)
+                h = compute_leverage(X_scaled_ad[0, :], xtx_inv)
                 inside_ad = h <= h_star
 
                 rows.append({
