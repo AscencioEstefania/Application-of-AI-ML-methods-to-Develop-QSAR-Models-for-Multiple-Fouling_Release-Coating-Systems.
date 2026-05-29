@@ -427,11 +427,14 @@ else:
                 X_scaled = scaler.transform(X_model)
                 expected = model.n_features_in_
 
-if X_scaled.shape[1] < expected:
-    missing = expected - X_scaled.shape[1]
-    X_scaled = np.hstack([X_scaled, np.zeros((X_scaled.shape[0], missing))])
+                if X_scaled.shape[1] < expected:
+                    missing = expected - X_scaled.shape[1]
+                    X_scaled = np.hstack([X_scaled, np.zeros((X_scaled.shape[0], missing))])
 
-y_hat = model.predict(X_scaled)
+                elif X_scaled.shape[1] > expected:
+                    X_scaled = X_scaled[:, :expected]
+
+                y_hat = model.predict(X_scaled)
 
                 h = compute_leverage(X_scaled[0, :], xtx_inv)
                 inside_ad = h <= h_star
