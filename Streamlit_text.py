@@ -386,12 +386,16 @@ def compute_leverage(x_scaled_row: np.ndarray, xtx_inv: np.ndarray) -> float:
 
 
 def style_confidence(df: pd.DataFrame):
+
     def _color_conf(v):
         v = str(v).strip().upper()
+
         if v == "HIGH":
             return "background-color: #0b7a0b; color: white; font-weight: bold;"
+
         if v == "LOW":
             return "background-color: #b00020; color: white; font-weight: bold;"
+
         return ""
 
     return df.style.map(_color_conf, subset=["Confidence"])
