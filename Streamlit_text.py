@@ -7,9 +7,48 @@ st.set_page_config(page_title="Fouling Release Predictor", layout="wide")
 
 st.image("fouling_boat.png", use_container_width=True)
 st.title("Fouling Release Predictor")
+st.caption("Models implemented: N. incerta at 10 psi and C. lytica at 20 psi")
 
-PURE_CSV_PATH = "Pure_descriptors.csv"
 COMP_COL = "Comp"
+
+TARGET_OPTIONS = {
+    "N. incerta at 10 psi": {
+        "pure_csv": "Pure_descriptors.csv",
+        "train_csv": "1_data/5_N_incerta_10_psi_training.csv",
+        "model_path": "best_gbr_model.pkl",
+        "features": ["C-006", "ATSC2c", "IC3"],
+        "output_name": "N. incerta at 10 psi",
+        "csv_name": "n_incerta_10psi_predictions.csv",
+        "pressure_label": "10 psi",
+    },
+    "C. lytica at 20 psi": {
+        "pure_csv": "Pure_descriptors_C_lytica.csv",
+        "train_csv": "C_lytica_Unid_Monomericas_20_psi.csv",
+        "model_path": "Lytica_best_gbr_model.pkl",
+        "features": ["nOHp", "MATS3Z", "ATS4are"],
+        "output_name": "C. lytica at 20 psi",
+        "csv_name": "c_lytica_20psi_predictions.csv",
+        "pressure_label": "20 psi",
+    },
+}
+
+st.markdown("---")
+st.header("0) Select prediction model")
+
+selected_target = st.selectbox(
+    "Select microorganism/model:",
+    list(TARGET_OPTIONS.keys()),
+)
+
+TARGET_CONFIG = TARGET_OPTIONS[selected_target]
+
+PURE_CSV_PATH = TARGET_CONFIG["pure_csv"]
+TRAIN_CSV_PATH = TARGET_CONFIG["train_csv"]
+MODEL_PATH = TARGET_CONFIG["model_path"]
+MODEL_FEATURES = TARGET_CONFIG["features"]
+OUTPUT_NAME = TARGET_CONFIG["output_name"]
+OUTPUT_CSV_NAME = TARGET_CONFIG["csv_name"]
+PRESSURE_LABEL = TARGET_CONFIG["pressure_label"]
 
 
 @st.cache_data
@@ -334,9 +373,7 @@ st.header("2) Model prediction")
 from sklearn.preprocessing import StandardScaler
 import pickle
 
-TRAIN_CSV_PATH = "1_data/5_N_incerta_10_psi_training.csv"
-MODEL_PATH = "best_gbr_model.pkl"
-MODEL_FEATURES = ["C-006", "ATSC2c", "IC3"]
+# Model files, training CSV, and descriptors are selected above from TARGET_OPTIONS.
 
 
 def read_training_csv(path: str) -> pd.DataFrame:
@@ -374,6 +411,14 @@ def load_scaler_model_and_ad(train_csv_path: str, model_path: str):
 
 
 def prepare_X_for_model(X_mix: np.ndarray, all_feature_cols: list) -> np.ndarray:
+    missing_features = [f for f in MODEL_FEATURES if f not in all_feature_cols]
+
+    if missing_features:
+        raise ValueError(
+            "The following model descriptors are missing from the pure descriptor CSV: "
+            + ", ".join(missing_features)
+        )
+
     idx = [all_feature_cols.index(f) for f in MODEL_FEATURES]
     X_model = X_mix[:, idx].astype(float)
     return X_model
@@ -409,11 +454,11 @@ except Exception as e:
 
 mix_map = {}
 if X_mix1 is not None:
-    mix_map["System 1 (% removal 10 psi)"] = X_mix1
+    mix_map[f"System 1 (% removal {PRESSURE_LABEL})"] = X_mix1
 if X_mix2 is not None:
-    mix_map["System 2 (% removal 10 psi)"] = X_mix2
+    mix_map[f"System 2 (% removal {PRESSURE_LABEL})"] = X_mix2
 if X_mix3 is not None:
-    mix_map["System 3 (% removal 10 psi)"] = X_mix3
+    mix_map[f"System 3 (% removal {PRESSURE_LABEL})"] = X_mix3
 
 if not mix_map:
     st.warning("No mix descriptors available. Please run at least one system.")
@@ -459,12 +504,13 @@ else:
                 })
 
         df_out = pd.DataFrame(rows)
-        st.subheader("N. incerta at 10 psi")
+        st.subheader(OUTPUT_NAME)
         st.dataframe(style_confidence(df_out), use_container_width=True)
 
         st.download_button(
             "Download predictions",
             data=df_out.to_csv(index=False).encode("utf-8"),
-            file_name="fouling_release_predictions.csv",
+            file_name=OUTPUT_CSV_NAME,
             mime="text/csv",
         )
+    
