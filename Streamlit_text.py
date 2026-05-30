@@ -473,7 +473,7 @@ else:
                 X_scaled_ad = scaler.transform(X_model)
                 X_scaled_model = X_scaled_ad.copy()
 
-                expected = model.n_features_in_
+                expected = getattr(model, "n_features_in_", X_scaled_model.shape[1])
 
                 if X_scaled_model.shape[1] < expected:
                     missing = expected - X_scaled_model.shape[1]
