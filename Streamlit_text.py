@@ -384,7 +384,6 @@ def read_training_csv(path: str) -> pd.DataFrame:
     return df
 
 
-@st.cache_resource
 def load_scaler_model_and_ad(train_csv_path: str, model_path: str):
     data = read_training_csv(train_csv_path)
 
